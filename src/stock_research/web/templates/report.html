@@ -4,11 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>每日股票研究报告 · {{ report.report_date }}</title>
-  <link rel="stylesheet" href="/static/app.css">
+  {% if standalone %}
+  <style>
+    body { margin: 0; color: #16243b; background: #f3f6fa; font-family: sans-serif; line-height: 1.55; }
+    main { width: min(920px, 92vw); margin: 0 auto; padding: 3rem 0 5rem; }
+    article { margin: 2rem 0; padding-top: 1rem; border-top: 2px solid #dbe3ed; }
+    dl { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; }
+    dt, dd { margin: 0; padding: .38rem .6rem; border-bottom: 1px solid #dbe3ed; overflow-wrap: anywhere; }
+    dt { font-weight: 700; } a { color: #1769aa; } .notice { padding: 1rem; border-left: 5px solid #bd7a16; background: white; }
+  </style>
+  {% else %}<link rel="stylesheet" href="/static/app.css">{% endif %}
 </head>
 <body>
 <main class="report-page">
-  <p><a href="/">← 返回研究看板</a></p>
+  {% if not standalone %}<p><a href="/">← 返回研究看板</a></p>{% endif %}
   <header>
     <p class="eyebrow">完整研究记录</p>
     <h1>每日股票研究报告 · {{ report.report_date }}</h1>

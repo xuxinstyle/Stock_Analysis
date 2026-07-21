@@ -2,6 +2,7 @@ import json
 
 from sqlalchemy import Column, Engine, MetaData, String, Table, Text, select, text
 from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.exc import IntegrityError
 
 from stock_research.domain.models import StockConfig
 
@@ -16,6 +17,10 @@ stocks = Table(
     Column("industry", String, nullable=True),
     Column("holding", Text, nullable=True),
 )
+
+
+class DuplicateStockError(ValueError):
+    """Raised when a create operation targets an existing stock symbol."""
 
 
 class StockRepository:
@@ -38,6 +43,21 @@ class StockRepository:
         )
         with self.engine.begin() as connection:
             connection.execute(statement)
+        return stock
+
+    def create(self, stock: StockConfig) -> StockConfig:
+        values = {
+            "symbol": stock.symbol,
+            "name": stock.name,
+            "market": stock.market.value,
+            "industry": stock.industry,
+            "holding": self._serialize_holding(stock),
+        }
+        try:
+            with self.engine.begin() as connection:
+                connection.execute(stocks.insert().values(**values))
+        except IntegrityError as error:
+            raise DuplicateStockError(stock.symbol) from error
         return stock
 
     def list_all(self) -> list[StockConfig]:

@@ -97,6 +97,7 @@ class ReportStore:
             report=report,
             recommendation_for=self._recommendation_for,
             structured_fields=self._structured_fields,
+            standalone=True,
         )
 
     @staticmethod

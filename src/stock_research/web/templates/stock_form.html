@@ -17,8 +17,7 @@
         <label>市场
           <select name="market" required>
             <option value="">请选择</option>
-            <option value="a_share" {% if values.get('market') == 'a_share' %}selected{% endif %}>A 股</option>
-            <option value="hong_kong" {% if values.get('market') == 'hong_kong' %}selected{% endif %}>港股</option>
+            {% for market in markets %}<option value="{{ market.value }}" {% if values.get('market') == market.value %}selected{% endif %}>{{ market.value }}</option>{% endfor %}
           </select>
           {% if errors.market %}<span class="field-error" data-field="market">{{ errors.market }}</span>{% endif %}
         </label>
@@ -38,7 +37,7 @@
         <label>风险偏好
           <select name="risk_profile">
             <option value="">未填写</option>
-            {% for option, label in [("conservative", "保守"), ("balanced", "均衡"), ("aggressive", "进取")] %}<option value="{{ option }}" {% if values.get('risk_profile') == option %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            {% for profile in risk_profiles %}<option value="{{ profile }}" {% if values.get('risk_profile') == profile %}selected{% endif %}>{{ profile }}</option>{% endfor %}
           </select>
           {% if errors.risk_profile %}<span class="field-error" data-field="risk_profile">{{ errors.risk_profile }}</span>{% endif %}
         </label>

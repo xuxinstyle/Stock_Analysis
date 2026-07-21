@@ -3,11 +3,13 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from stock_research.db import create_engine_at
 from stock_research.repositories.reports import ReportRepository
 from stock_research.repositories.stocks import StockRepository
-from stock_research.web.app import ServiceContainer, create_app
+from stock_research.services.report_store import ReportStore
+from stock_research.web.app import ServiceContainer, StockForm, create_app
 
 from test_report_store import make_complete_report
 
@@ -115,6 +117,55 @@ def test_create_stock_converts_blank_optional_holding_fields_to_none(
     assert saved[0].holding is None
 
 
+@pytest.mark.parametrize("endpoint", ["/stocks", "/stocks/new"])
+def test_create_stock_rejects_duplicate_without_overwriting_existing_row(
+    client: TestClient, endpoint: str
+) -> None:
+    client.post(
+        "/stocks/new",
+        data={
+            "symbol": "SH.600000",
+            "name": "原始名称",
+            "market": "a_share",
+            "industry": "银行",
+        },
+    )
+
+    response = client.post(
+        endpoint,
+        data={
+            "symbol": "SH.600000",
+            "name": "不应覆盖",
+            "market": "a_share",
+            "industry": "错误行业",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "股票代码" in response.text
+    assert "已存在" in response.text
+    saved = client.app.state.services.stocks.list_all()
+    assert len(saved) == 1
+    assert saved[0].name == "原始名称"
+    assert saved[0].industry == "银行"
+
+
+def test_domain_models_are_the_canonical_market_holding_and_risk_validators() -> None:
+    form = StockForm.model_validate(
+        {
+            "symbol": "SH.600000",
+            "name": "测试",
+            "market": "not_a_market",
+            "quantity": "-1",
+            "cost_basis": "10",
+            "risk_profile": "not_a_profile",
+        }
+    )
+
+    with pytest.raises(ValidationError):
+        form.to_stock()
+
+
 def test_edit_stock_persists_validated_holding_and_blank_holding_options(
     client: TestClient,
 ) -> None:
@@ -195,3 +246,19 @@ def test_app_starts_without_fetching_data_when_repositories_are_empty(
     assert app.state.services.reports.latest() is None
     assert app.state.services.stocks.list_all() == []
     assert date(2026, 7, 21) not in app.state.services.reports.list_dates()
+
+
+def test_report_rendering_is_standalone_safe_for_artifacts_and_live_for_web(
+    client: TestClient, tmp_path: Path
+) -> None:
+    report = make_complete_report()
+    client.app.state.services.reports.save(report)
+
+    live_html = client.get(f"/reports/{report.report_date}").text
+    artifact_html = ReportStore(tmp_path).save(report).html.read_text(encoding="utf-8")
+
+    assert 'href="/static/app.css"' in live_html
+    assert 'href="/"' in live_html
+    assert 'href="/static/app.css"' not in artifact_html
+    assert 'href="/"' not in artifact_html
+    assert "<style>" in artifact_html

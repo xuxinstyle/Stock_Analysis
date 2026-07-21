@@ -2,22 +2,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal, get_args, get_origin
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ValidationError, field_validator
 
 from stock_research.cli import app_home
 from stock_research.db import create_engine_at
 from stock_research.domain.enums import Horizon, Market
 from stock_research.domain.models import Holding, StockConfig
 from stock_research.repositories.reports import ReportRepository
-from stock_research.repositories.stocks import StockRepository
+from stock_research.repositories.stocks import DuplicateStockError, StockRepository
 from stock_research.services.report_store import ReportStore
 
 
@@ -32,12 +31,12 @@ class ServiceContainer:
 class StockForm(BaseModel):
     symbol: str
     name: str
-    market: Market
+    market: str
     industry: str | None = None
-    quantity: Annotated[Decimal | None, Field(default=None, gt=0)]
-    cost_basis: Annotated[Decimal | None, Field(default=None, gt=0)]
-    cash_available: Annotated[Decimal | None, Field(default=None, ge=0)]
-    risk_profile: Literal["conservative", "balanced", "aggressive"] | None = None
+    quantity: str | None = None
+    cost_basis: str | None = None
+    cash_available: str | None = None
+    risk_profile: str | None = None
 
     @field_validator("symbol", "name", mode="before")
     @classmethod
@@ -69,18 +68,31 @@ class StockForm(BaseModel):
         holding = None
         if any(value is not None for value in holding_values.values()):
             holding = Holding.model_validate(holding_values)
-        return StockConfig(
-            symbol=self.symbol,
-            name=self.name,
-            market=self.market,
-            industry=self.industry,
-            holding=holding,
+        return StockConfig.model_validate(
+            {
+                "symbol": self.symbol,
+                "name": self.name,
+                "market": self.market,
+                "industry": self.industry,
+                "holding": holding,
+            }
         )
 
 
 WEB_ROOT = Path(__file__).parent
 TEMPLATE_DIRECTORY = WEB_ROOT / "templates"
 STATIC_DIRECTORY = WEB_ROOT / "static"
+
+
+def _risk_profile_choices() -> list[str]:
+    annotation = Holding.model_fields["risk_profile"].annotation
+    literal = next(
+        (candidate for candidate in get_args(annotation) if get_origin(candidate) is Literal),
+        None,
+    )
+    if literal is None:
+        raise RuntimeError("Holding.risk_profile must expose literal choices")
+    return list(get_args(literal))
 
 
 def build_services(home: Path | None = None) -> ServiceContainer:
@@ -134,7 +146,7 @@ def _report_router(services: ServiceContainer, templates: Jinja2Templates) -> AP
         return templates.TemplateResponse(
             request=request,
             name="report.html",
-            context={"report": report},
+            context={"report": report, "standalone": False},
         )
 
     return router
@@ -153,7 +165,7 @@ def _stock_router(services: ServiceContainer, templates: Jinja2Templates) -> API
 
     @router.post("/stocks")
     async def stock_create_from_list(request: Request) -> HTMLResponse:
-        return await _save_stock(request, services, templates)
+        return await _save_stock(request, services, templates, create_only=True)
 
     @router.get("/stocks/new", response_class=HTMLResponse)
     def stock_new(request: Request) -> HTMLResponse:
@@ -161,7 +173,7 @@ def _stock_router(services: ServiceContainer, templates: Jinja2Templates) -> API
 
     @router.post("/stocks/new")
     async def stock_create(request: Request) -> HTMLResponse:
-        return await _save_stock(request, services, templates)
+        return await _save_stock(request, services, templates, create_only=True)
 
     @router.get("/stocks/{symbol}/edit", response_class=HTMLResponse)
     def stock_edit(request: Request, symbol: str) -> HTMLResponse:
@@ -195,6 +207,7 @@ async def _save_stock(
     services: ServiceContainer,
     templates: Jinja2Templates,
     editing_symbol: str | None = None,
+    create_only: bool = False,
 ) -> HTMLResponse:
     submitted = {key: str(value) for key, value in (await request.form()).items()}
     if editing_symbol is not None and submitted.get("symbol") != editing_symbol:
@@ -217,7 +230,20 @@ async def _save_stock(
             editing_symbol=editing_symbol,
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
-    services.stocks.upsert(stock)
+    try:
+        if create_only:
+            services.stocks.create(stock)
+        else:
+            services.stocks.upsert(stock)
+    except DuplicateStockError:
+        return _stock_form_response(
+            request,
+            templates,
+            values=submitted,
+            errors={"symbol": "股票代码：该股票代码已存在。"},
+            editing_symbol=editing_symbol,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
     return RedirectResponse("/stocks", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -238,6 +264,8 @@ def _stock_form_response(
             "errors": errors or {},
             "editing_symbol": editing_symbol,
             "form_action": (f"/stocks/{editing_symbol}/edit" if editing_symbol else "/stocks/new"),
+            "markets": list(Market),
+            "risk_profiles": _risk_profile_choices(),
         },
         status_code=status_code,
     )
