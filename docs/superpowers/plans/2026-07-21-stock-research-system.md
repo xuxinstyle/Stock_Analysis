@@ -440,7 +440,7 @@ def test_technical_snapshot_uses_most_recent_completed_bar() -> None:
     bars = make_bars(closes=[10 + index * 0.2 for index in range(40)])
     snapshot = calculate_technical_snapshot(bars)
     assert snapshot.data_as_of == date(2026, 7, 20)
-    assert snapshot.sma_20 == pytest.approx(13.9)
+    assert snapshot.sma_20 == pytest.approx(15.9)
     assert snapshot.trend is Trend.UP
 
 
