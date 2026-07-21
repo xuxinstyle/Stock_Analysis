@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}研究看板 · 每日股票研究{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">本地研究工作台</p>
+      <h1>每日股票研究</h1>
+    </div>
+    <a class="button secondary" href="/stocks">管理股票配置</a>
+  </div>
+
+  {% if report %}
+    <section class="notice research-notice" aria-label="研究用途声明">
+      <strong>仅供研究使用</strong>
+      <span>{{ report.disclaimer }}</span>
+    </section>
+
+    <section class="summary-grid">
+      <div class="summary-card"><span>报告日期</span><strong>{{ report.report_date }}</strong></div>
+      <div class="summary-card"><span>生成时间</span><strong>{{ report.generated_at.isoformat() }}</strong></div>
+      <div class="summary-card"><span>运行状态</span><strong>{{ report.run_status.value }}</strong></div>
+      <div class="summary-card"><span>覆盖股票</span><strong>{{ report.analyses|length }}</strong></div>
+    </section>
+
+    <div class="two-column">
+      <section class="panel">
+        <h2>市场状态</h2>
+        <ul class="fact-list">
+          {% for item in report.market_statuses %}
+            <li><strong>{{ item.market.value }}</strong> · {{ item.status }} · {{ item.data_as_of or "无可用日期" }}<br>{{ item.message }}</li>
+          {% else %}<li>暂无市场状态。</li>{% endfor %}
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>全局风险</h2>
+        <ul class="fact-list">{% for risk in report.global_risks %}<li>{{ risk }}</li>{% else %}<li>暂无已记录的全局风险。</li>{% endfor %}</ul>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>运行警告与数据缺口</h2>
+      <ul class="fact-list">{% for warning in report.run_warnings %}<li>{{ warning }}</li>{% else %}<li>无运行警告。</li>{% endfor %}</ul>
+    </section>
+
+    <section class="panel wide-panel">
+      <div class="section-heading">
+        <h2>股票摘要</h2>
+        <a href="/reports/{{ report.report_date }}">查看完整报告</a>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>股票</th><th>前日变动</th><th>趋势</th><th>短期动作</th><th>置信度</th><th>数据缺口</th><th></th></tr></thead>
+          <tbody>
+          {% for analysis in report.analyses %}
+            {% set short = recommendation_for(analysis, short_horizon) %}
+            <tr>
+              <td><strong>{{ analysis.stock.symbol }}</strong><br><span class="muted">{{ analysis.stock.name }}</span></td>
+              <td>{% if analysis.previous_day and analysis.previous_day.change_percent is not none %}{{ "%+.2f"|format(analysis.previous_day.change_percent) }}%{% elif analysis.previous_day %}{{ "%+.4f"|format(analysis.previous_day.change) }}{% else %}不可用{% endif %}</td>
+              <td>{{ analysis.technical.trend.value if analysis.technical else "不可用" }}</td>
+              <td data-horizon="short">{{ short.action.value if short else "不可用" }}</td>
+              <td>{{ short.confidence.value if short else "不可用" }}</td>
+              <td>{% if analysis.data_gaps %}{{ analysis.data_gaps|join("；") }}{% else %}无{% endif %}</td>
+              <td><a href="/reports/{{ report.report_date }}#{{ analysis.stock.symbol }}">详情</a></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% else %}
+    <section class="empty-state">
+      <h1>尚无研究报告</h1>
+      <p>生成并保存第一份研究报告后，最新摘要会显示在这里。</p>
+      <a class="button" href="/stocks">先配置股票</a>
+    </section>
+  {% endif %}
+
+  {% if report_dates %}
+    <section class="panel">
+      <h2>报告历史</h2>
+      <div class="link-row">{% for item in report_dates %}<a href="/reports/{{ item }}">{{ item }}</a>{% endfor %}</div>
+    </section>
+  {% endif %}
+{% endblock %}

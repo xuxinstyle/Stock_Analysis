@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}股票配置 · 每日股票研究{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div><p class="eyebrow">研究范围</p><h1>股票配置</h1></div>
+    <a class="button" href="/stocks/new">新增股票</a>
+  </div>
+  <section class="panel wide-panel">
+    {% if stocks %}
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>股票</th><th>市场</th><th>行业</th><th>持仓</th><th>操作</th></tr></thead>
+          <tbody>
+          {% for stock in stocks %}
+            <tr>
+              <td><strong>{{ stock.symbol }}</strong><br><span class="muted">{{ stock.name }}</span></td>
+              <td>{{ stock.market.value }}</td>
+              <td>{{ stock.industry or "未填写" }}</td>
+              <td>{% if stock.holding %}{{ stock.holding.quantity }} @ {{ stock.holding.cost_basis }}{% else %}未填写{% endif %}</td>
+              <td class="actions">
+                <a href="/stocks/{{ stock.symbol }}/edit">编辑</a>
+                <form method="post" action="/stocks/{{ stock.symbol }}/delete"><button class="danger-link" type="submit">删除</button></form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state compact"><h2>尚未配置股票</h2><p>新增股票后，它会进入每日研究范围。</p></div>
+    {% endif %}
+  </section>
+{% endblock %}

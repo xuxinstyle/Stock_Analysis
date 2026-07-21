@@ -45,6 +45,18 @@ class StockRepository:
             rows = connection.execute(select(stocks).order_by(text("rowid"))).mappings().all()
         return [self._deserialize_stock(dict(row)) for row in rows]
 
+    def get(self, symbol: str) -> StockConfig | None:
+        statement = select(stocks).where(stocks.c.symbol == symbol)
+        with self.engine.connect() as connection:
+            row = connection.execute(statement).mappings().one_or_none()
+        return None if row is None else self._deserialize_stock(dict(row))
+
+    def delete(self, symbol: str) -> bool:
+        statement = stocks.delete().where(stocks.c.symbol == symbol)
+        with self.engine.begin() as connection:
+            result = connection.execute(statement)
+        return result.rowcount == 1
+
     def replace_all(self, values: list[StockConfig]) -> list[StockConfig]:
         rows = [
             {

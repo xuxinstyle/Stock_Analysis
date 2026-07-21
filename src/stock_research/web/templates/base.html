@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}每日股票研究{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/">每日股票研究</a>
+    <nav aria-label="主导航">
+      <a href="/">研究看板</a>
+      <a href="/stocks">股票配置</a>
+    </nav>
+  </header>
+  <main class="page-shell">{% block content %}{% endblock %}</main>
+</body>
+</html>

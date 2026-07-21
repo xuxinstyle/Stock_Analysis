@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ "编辑" if editing_symbol else "新增" }}股票 · 每日股票研究{% endblock %}
+{% block content %}
+  <div class="page-heading"><div><p class="eyebrow">股票配置</p><h1>{{ "编辑" if editing_symbol else "新增" }}股票</h1></div></div>
+  <form class="panel form-panel" method="post" action="{{ form_action }}" novalidate>
+    <fieldset>
+      <legend>基本信息</legend>
+      <div class="form-grid">
+        <label>股票代码
+          <input name="symbol" value="{{ values.get('symbol', '') }}" placeholder="SH.600000" {% if editing_symbol %}readonly{% endif %} required>
+          {% if errors.symbol %}<span class="field-error" data-field="symbol">{{ errors.symbol }}</span>{% endif %}
+        </label>
+        <label>股票名称
+          <input name="name" value="{{ values.get('name', '') }}" required>
+          {% if errors.name %}<span class="field-error" data-field="name">{{ errors.name }}</span>{% endif %}
+        </label>
+        <label>市场
+          <select name="market" required>
+            <option value="">请选择</option>
+            <option value="a_share" {% if values.get('market') == 'a_share' %}selected{% endif %}>A 股</option>
+            <option value="hong_kong" {% if values.get('market') == 'hong_kong' %}selected{% endif %}>港股</option>
+          </select>
+          {% if errors.market %}<span class="field-error" data-field="market">{{ errors.market }}</span>{% endif %}
+        </label>
+        <label>行业（可选）
+          <input name="industry" value="{{ values.get('industry', '') }}">
+          {% if errors.industry %}<span class="field-error" data-field="industry">{{ errors.industry }}</span>{% endif %}
+        </label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>持仓信息（全部可选）</legend>
+      <p class="muted">如填写任一持仓字段，持仓数量与持仓成本必须同时有效。</p>
+      <div class="form-grid">
+        <label>持仓数量<input name="quantity" inputmode="decimal" value="{{ values.get('quantity', '') }}">{% if errors.quantity %}<span class="field-error" data-field="quantity">{{ errors.quantity }}</span>{% endif %}</label>
+        <label>持仓成本<input name="cost_basis" inputmode="decimal" value="{{ values.get('cost_basis', '') }}">{% if errors.cost_basis %}<span class="field-error" data-field="cost_basis">{{ errors.cost_basis }}</span>{% endif %}</label>
+        <label>可用资金<input name="cash_available" inputmode="decimal" value="{{ values.get('cash_available', '') }}">{% if errors.cash_available %}<span class="field-error" data-field="cash_available">{{ errors.cash_available }}</span>{% endif %}</label>
+        <label>风险偏好
+          <select name="risk_profile">
+            <option value="">未填写</option>
+            {% for option, label in [("conservative", "保守"), ("balanced", "均衡"), ("aggressive", "进取")] %}<option value="{{ option }}" {% if values.get('risk_profile') == option %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+          {% if errors.risk_profile %}<span class="field-error" data-field="risk_profile">{{ errors.risk_profile }}</span>{% endif %}
+        </label>
+      </div>
+    </fieldset>
+    <div class="form-actions"><button class="button" type="submit">保存配置</button><a href="/stocks">取消</a></div>
+  </form>
+{% endblock %}

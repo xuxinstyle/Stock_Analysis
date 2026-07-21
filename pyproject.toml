@@ -14,6 +14,7 @@ dependencies = [
   "numpy>=2.0,<3.0",
   "pandas>=2.2,<3.0",
   "pydantic>=2.10,<3.0",
+  "python-multipart>=0.0.18,<1.0",
   "pyyaml>=6.0,<7.0",
   "sqlalchemy>=2.0,<3.0",
   "typer>=0.15,<1.0",
@@ -27,7 +28,7 @@ stock-research = "stock_research.cli:app"
 dev = ["pytest>=8.3", "ruff>=0.8"]
 
 [tool.setuptools.package-data]
-stock_research = ["resources/*.yaml"]
+stock_research = ["resources/*.yaml", "web/templates/*.html", "web/static/*.css"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
