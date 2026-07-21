@@ -91,15 +91,28 @@ def make_bars(end: date = date(2026, 7, 20)) -> pd.DataFrame:
 
 class FakeMarketData:
     def __init__(
-        self, unavailable: set[str] | None = None, *, bars_end: date = date(2026, 7, 20)
+        self,
+        unavailable: set[str] | None = None,
+        *,
+        bars_end: date = date(2026, 7, 20),
+        bars_ends: dict[str, date] | None = None,
     ) -> None:
         self.unavailable = unavailable or set()
         self.bars_end = bars_end
+        self.bars_ends = bars_ends or {}
 
     def fetch_daily_bars(self, stock: StockConfig, end: date, days: int = 260) -> pd.DataFrame:
         if stock.symbol in self.unavailable:
             raise MarketDataUnavailable(stock.symbol, "fixture market outage")
-        return make_bars(self.bars_end)
+        return make_bars(self.bars_ends.get(stock.symbol, self.bars_end))
+
+
+class FixtureSessionCalendar:
+    def __init__(self, completed_sessions: dict[tuple[Market, date], date | None]) -> None:
+        self.completed_sessions = completed_sessions
+
+    def latest_completed_session(self, market: Market, report_date: date) -> date | None:
+        return self.completed_sessions[(market, report_date)]
 
 
 def test_builder_creates_complete_analysis_and_preserves_citations() -> None:
@@ -241,7 +254,7 @@ def test_jointly_stale_technical_and_research_dates_are_partial() -> None:
     )
 
     assert report.run_status is RunStatus.PARTIAL
-    assert "expected last weekday 2026-07-20" in report.analyses[0].data_gaps[0]
+    assert "expected completed session 2026-07-20" in report.analyses[0].data_gaps[0]
     assert all(item.action is Action.WATCH for item in report.analyses[0].recommendations)
 
 
@@ -259,6 +272,40 @@ def test_monday_report_uses_friday_as_expected_session() -> None:
     )
 
     assert report.run_status is RunStatus.SUCCESS
+
+
+def test_market_status_uses_market_specific_completed_sessions_and_keeps_stale_date() -> None:
+    a_share = make_stock()
+    hong_kong = make_stock("HK.00700")
+    request = make_request(
+        make_research().model_copy(update={"data_as_of": date(2026, 7, 17)}),
+        make_research("HK.00700").model_copy(update={"data_as_of": date(2026, 7, 17)}),
+    )
+    calendar = FixtureSessionCalendar(
+        {
+            (Market.A_SHARE, request.report_date): date(2026, 7, 17),
+            (Market.HONG_KONG, request.report_date): date(2026, 7, 20),
+        }
+    )
+
+    report = ReportBuilder(session_calendar=calendar).build(
+        request,
+        [a_share, hong_kong],
+        FakeMarketData(
+            bars_ends={
+                a_share.symbol: date(2026, 7, 17),
+                hong_kong.symbol: date(2026, 7, 17),
+            }
+        ),
+    )
+
+    statuses = {status.market: status for status in report.market_statuses}
+    assert report.run_status is RunStatus.PARTIAL
+    assert statuses[Market.A_SHARE].status == "available"
+    assert statuses[Market.A_SHARE].data_as_of == date(2026, 7, 17)
+    assert statuses[Market.HONG_KONG].status == "unavailable"
+    assert statuses[Market.HONG_KONG].data_as_of == date(2026, 7, 17)
+    assert "expected completed session 2026-07-20" in report.analyses[1].data_gaps[0]
 
 
 @pytest.mark.parametrize(

@@ -76,6 +76,14 @@ class ReportStore:
         return self.repository.get(report_date)
 
     @staticmethod
+    def load_read_only(root: Path, report_date: date) -> DailyReport | None:
+        path = Path(root) / report_date.isoformat() / "report.json"
+        try:
+            return DailyReport.model_validate_json(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+
+    @staticmethod
     def _atomic_write(path: Path, content: str) -> None:
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=f".{path.name}.", suffix=".tmp", dir=path.parent

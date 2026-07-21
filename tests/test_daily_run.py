@@ -23,9 +23,8 @@ TEST_DATA_DIR = Path(__file__).parent / "fixtures"
 DAILY_RESEARCH_PROMPT = PROJECT_ROOT / "docs" / "automation" / "daily-research-prompt.md"
 README = PROJECT_ROOT / "README.md"
 ACTIVE_STOCK_COMMAND = (
-    "python -c 'from stock_research.cli import build_services; import json; "
-    "print(json.dumps([dict(symbol=stock.symbol, name=stock.name, market=stock.market.value) "
-    "for stock in build_services().configuration.list_stocks()], ensure_ascii=False))'"
+    "python -c 'from stock_research.cli import active_stock_context; import json; "
+    "print(json.dumps(active_stock_context(), ensure_ascii=False))'"
 )
 runner = CliRunner()
 
@@ -44,8 +43,8 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
         "last completed trading session",
         "SQLite-backed persisted active stock list",
         "same app home and repository used by `DailyRunService`",
-        "python -c 'from stock_research.cli import build_services; import json; print(json.dumps",
-        "dict(symbol=stock.symbol, name=stock.name, market=stock.market.value)",
+        "from stock_research.cli import active_stock_context",
+        "json.dumps(active_stock_context(), ensure_ascii=False)",
         "stock-research validate-input",
         "stock-research generate --input",
         "Prefer primary sources",
@@ -57,7 +56,7 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
         "US peers",
         "international transmission",
         "title, URL, source name, publication time, retrieval time, direction, credibility, category, summary",
-        "title`, `occurred_at`, `direction`, `summary`, and `symbols`",
+        "title`, `occurred_at`, `direction`, `summary`, `symbols`, and `scope`",
         "source links",
         "unverified",
         "conflicting",
@@ -76,6 +75,7 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
     assert "YAML is only an import input" in readme
     assert ACTIVE_STOCK_COMMAND in prompt
     assert ACTIVE_STOCK_COMMAND in readme
+    assert "stock-research report YYYY-MM-DD" in readme
     assert "$env:STOCK_RESEARCH_HOME/config/stocks.yaml" not in readme
     assert ".stock-research/config/stocks.yaml" not in readme
 
@@ -90,6 +90,14 @@ def test_readme_documents_read_only_failed_run_inspection() -> None:
         "FROM runs ORDER BY started_at DESC LIMIT 10"
     ) in readme
     assert "`stock-research reports` lists generated reports, not failed run attempts" in readme
+
+
+def test_readme_documents_holding_risk_profile_research_caps() -> None:
+    readme = README.read_text(encoding="utf-8")
+
+    assert "conservative: ≤5% / ≤10% / ≤15%" in readme
+    assert "balanced: ≤10% / ≤15% / ≤20%" in readme
+    assert "aggressive: ≤15% / ≤20% / ≤25%" in readme
 
 
 def test_fixture_payload_can_be_validated_then_generated_by_cli(
@@ -151,6 +159,26 @@ def test_daily_run_marks_partial_when_one_stock_has_no_price_data(tmp_path: Path
     assert any("HK.00700" in warning for warning in result.run_warnings)
     assert len(result.analyses) == 2
     assert (tmp_path / "reports" / "2026-07-21" / "report.json").exists()
+
+
+def test_daily_run_fails_configuration_when_no_active_stocks_are_persisted(tmp_path: Path) -> None:
+    runs = RunRepository(create_engine_at(tmp_path / "runs.sqlite3"))
+    service = DailyRunService(
+        stock_repository=FakeStockRepository([]),
+        market_data_provider=FakeMarketData(),
+        report_builder=ReportBuilder(),
+        report_store=ReportStore(tmp_path / "reports"),
+        run_repository=runs,
+    )
+
+    with pytest.raises(ValueError, match="no active stocks are configured"):
+        service.run(make_request())
+
+    record = runs.latest()
+    assert record is not None
+    assert record.status is RunStatus.FAILED
+    assert record.stage == "configuration"
+    assert not (tmp_path / "reports" / "2026-07-21" / "report.json").exists()
 
 
 class ExplodingBuilder:

@@ -4,6 +4,7 @@ import json
 import os
 from dataclasses import dataclass
 from importlib.resources import files
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
@@ -54,6 +55,26 @@ def build_services(home: Path | None = None) -> Services:
         ),
         report_store=report_store,
     )
+
+
+def active_stock_context(home: Path | None = None) -> list[dict[str, object]]:
+    context: list[dict[str, object]] = []
+    for stock in build_services(home).configuration.list_stocks():
+        holding = stock.holding
+        context.append(
+            {
+                "symbol": stock.symbol,
+                "name": stock.name,
+                "market": stock.market.value,
+                "industry": stock.industry,
+                "holding": (
+                    None
+                    if holding is None
+                    else {"configured": True, "risk_profile": holding.risk_profile}
+                ),
+            }
+        )
+    return context
 
 
 def _configuration_path(home: Path | None = None) -> Path:
@@ -144,6 +165,23 @@ def reports() -> None:
         report = store.load(report_date)
         if report is not None:
             typer.echo(f"{report_date.isoformat()}: {report.run_status.value}")
+
+
+@app.command("report")
+def report(
+    report_date: Annotated[str, typer.Argument()],
+) -> None:
+    """Display one saved report without fetching data or generating output."""
+    try:
+        selected_date = date.fromisoformat(report_date)
+    except ValueError:
+        typer.echo("report date must use YYYY-MM-DD", err=True)
+        raise typer.Exit(code=2) from None
+    saved_report = ReportStore.load_read_only(app_home() / "reports", selected_date)
+    if saved_report is None:
+        typer.echo(f"report not found for {selected_date.isoformat()}")
+        raise typer.Exit(code=1)
+    typer.echo(saved_report.model_dump_json(indent=2))
 
 
 @app.command("serve")

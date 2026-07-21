@@ -50,6 +50,11 @@ class Direction(StrEnum):
     NEGATIVE = "negative"
 
 
+class EventScope(StrEnum):
+    LOCAL = "local"
+    INTERNATIONAL = "international"
+
+
 class EvidenceCategory(StrEnum):
     COMPANY = "company"
     INDUSTRY = "industry"

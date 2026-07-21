@@ -12,6 +12,7 @@ from stock_research.domain.enums import (
     Credibility,
     Direction,
     EvidenceCategory,
+    EventScope,
     Horizon,
     Market,
     RiskLevel,
@@ -88,6 +89,7 @@ class EventSignal(BaseModel):
     direction: Direction
     summary: str = Field(min_length=20, max_length=1500)
     symbols: list[str] = Field(min_length=1)
+    scope: EventScope = EventScope.LOCAL
     is_confirmed: bool = False
     citation_title: str | None = Field(default=None, min_length=4, max_length=240)
     citation_url: HttpUrl | None = None
@@ -122,6 +124,8 @@ class RecommendationInput(BaseModel):
     def validate_evidence_symbols(self) -> Self:
         if any(self.stock.symbol not in item.symbols for item in self.evidence):
             raise ValueError("evidence symbols must include recommendation stock symbol")
+        if any(self.stock.symbol not in event.symbols for event in self.events):
+            raise ValueError("event symbols must include recommendation stock symbol")
         return self
 
 
@@ -177,6 +181,8 @@ class StockResearchInput(BaseModel):
     def validate_evidence_symbols(self) -> Self:
         if any(self.symbol not in item.symbols for item in self.evidence):
             raise ValueError("evidence symbols must include research symbol")
+        if any(self.symbol not in event.symbols for event in self.events):
+            raise ValueError("event symbols must include research symbol")
         return self
 
 

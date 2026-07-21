@@ -92,6 +92,14 @@ def test_research_input_rejects_evidence_for_another_stock() -> None:
         StockResearchInput.model_validate(payload)
 
 
+def test_research_input_rejects_event_for_another_stock() -> None:
+    payload = valid_research_payload(symbol="SH.600000")
+    payload["events"][0]["symbols"] = ["HK.00700"]  # type: ignore[index]
+
+    with pytest.raises(ValidationError, match="event symbols must include research symbol"):
+        StockResearchInput.model_validate(payload)
+
+
 def test_research_input_rejects_us_subject_symbol() -> None:
     payload = valid_research_payload(symbol="US.AAPL")
     payload["evidence"] = [

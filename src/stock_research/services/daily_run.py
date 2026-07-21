@@ -37,6 +37,9 @@ class DailyRunService:
         stage = "load_stocks"
         try:
             stocks = self._stock_repository.list_all()
+            if not stocks:
+                stage = "configuration"
+                raise ValueError("no active stocks are configured")
             stage = "build_report"
             report = self._report_builder.build(
                 request=request,

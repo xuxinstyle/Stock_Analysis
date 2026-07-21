@@ -34,11 +34,11 @@ atomically replacing the active stock set. YAML is only an import input. After i
 source is the SQLite-backed persisted active repository; editing YAML alone does not change the
 active set. The web configuration screens update that same repository.
 
-To inspect the exact active daily symbols, names, and markets from that repository, use the same
-read-only service call as the Codex prompt:
+To inspect the exact active daily symbols, names, markets, industries, and optional holding-risk
+context from that repository, use the same read-only service call as the Codex prompt:
 
 ```powershell
-python -c 'from stock_research.cli import build_services; import json; print(json.dumps([dict(symbol=stock.symbol, name=stock.name, market=stock.market.value) for stock in build_services().configuration.list_stocks()], ensure_ascii=False))'
+python -c 'from stock_research.cli import active_stock_context; import json; print(json.dumps(active_stock_context(), ensure_ascii=False))'
 ```
 
 By default, configuration state and report history are stored locally under `.stock-research/` in
@@ -62,13 +62,15 @@ For a manual run, place the cited request in the inbox and use these commands:
 stock-research validate-input data/inbox/2026-07-21.json
 stock-research generate --input data/inbox/2026-07-21.json
 stock-research reports
+stock-research report 2026-07-21
 stock-research serve --port 8000
 ```
 
 `validate-input` checks the JSON schema without fetching prices or writing a report. `generate`
 reads the persisted active stock set, retrieves completed daily bars, builds the report, and prints
-the three output paths. `reports` lists saved dates and statuses. `serve` starts the local dashboard
-on `http://127.0.0.1:8000`; it binds only to loopback.
+the three output paths. `reports` lists saved dates and statuses. `report YYYY-MM-DD` reads and
+prints an already saved JSON report without fetching market data or creating report storage.
+`serve` starts the local dashboard on `http://127.0.0.1:8000`; it binds only to loopback.
 
 The complete CLI is:
 
@@ -78,6 +80,7 @@ stock-research import-config INPUT_PATH
 stock-research validate-input INPUT_PATH
 stock-research generate --input INPUT_PATH
 stock-research reports
+stock-research report YYYY-MM-DD
 stock-research serve --port 8000
 ```
 
@@ -109,6 +112,15 @@ triggers, invalidation conditions, position limits, confidence, and risks are no
 promises. Before acting on any report, read its **来源与数据缺口** (sources and data gaps) section,
 open the cited sources, check the run warnings and market dates, and account for any conflicting or
 unverified claims. A `partial` report must not be read as complete coverage.
+
+For non-low-confidence research views, a configured holding profile changes only the conditional
+percentage cap for short / medium / long horizons:
+
+- conservative: ≤5% / ≤10% / ≤15%
+- balanced: ≤10% / ≤15% / ≤20%
+- aggressive: ≤15% / ≤20% / ≤25%
+
+These are research risk constraints, not capital assumptions, orders, or return estimates.
 
 ## Failure recovery
 

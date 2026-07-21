@@ -1,6 +1,7 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+import pandas as pd
 import pytest
 from pydantic import ValidationError
 
@@ -23,6 +24,7 @@ from stock_research.domain.models import (
     TechnicalSnapshot,
 )
 from stock_research.services.recommendations import RecommendationEngine
+from stock_research.services.indicators import calculate_technical_snapshot
 
 
 def confirmed_bullish_input(*, holding: Holding | None = None) -> RecommendationInput:
@@ -132,6 +134,38 @@ def test_normal_confidence_uses_horizon_specific_position_limits() -> None:
     recommendations = RecommendationEngine().recommend(confirmed_bullish_input())
 
     assert [item.position_limit for item in recommendations] == ["≤10%", "≤15%", "≤20%"]
+
+
+def test_horizons_have_distinct_research_review_semantics() -> None:
+    recommendations = RecommendationEngine().recommend(confirmed_bullish_input())
+
+    assert len({item.trigger for item in recommendations}) == 3
+    assert len({item.observation_or_target for item in recommendations}) == 3
+    assert len({item.invalidation for item in recommendations}) == 3
+
+
+@pytest.mark.parametrize(
+    ("risk_profile", "expected_limits"),
+    [
+        ("conservative", ["≤5%", "≤10%", "≤15%"]),
+        ("balanced", ["≤10%", "≤15%", "≤20%"]),
+        ("aggressive", ["≤15%", "≤20%", "≤25%"]),
+    ],
+)
+def test_holding_risk_profile_adjusts_research_position_limits(
+    risk_profile: str, expected_limits: list[str]
+) -> None:
+    recommendations = RecommendationEngine().recommend(
+        confirmed_bullish_input(
+            holding=Holding(
+                quantity=Decimal("100"),
+                cost_basis=Decimal("10"),
+                risk_profile=risk_profile,  # type: ignore[arg-type]
+            )
+        )
+    )
+
+    assert [item.position_limit for item in recommendations] == expected_limits
 
 
 def test_high_volatility_cannot_return_buy() -> None:
@@ -304,6 +338,30 @@ def test_foreign_confirmed_negative_event_does_not_directly_action_recommendatio
     assert all(item.action is Action.BUY_IN_TRANCHES for item in recommendations)
 
 
+def test_confirmed_international_event_is_context_only_for_trade_decision() -> None:
+    analysis_input = confirmed_bullish_input().model_copy(
+        update={
+            "events": [
+                EventSignal(
+                    title="Overseas peer faces a regulatory investigation",
+                    occurred_at=datetime(2026, 7, 20, tzinfo=UTC),
+                    direction=Direction.NEGATIVE,
+                    summary="The event is relevant sector context but not a local decision signal.",
+                    symbols=["SH.600000"],
+                    scope="international",
+                    is_confirmed=True,
+                    citation_title="Overseas regulator release",
+                    citation_url="https://example.com/overseas-regulator",
+                )
+            ]
+        }
+    )
+
+    recommendations = RecommendationEngine().recommend(analysis_input)
+
+    assert all(item.action is Action.BUY_IN_TRANCHES for item in recommendations)
+
+
 def test_confirmed_event_requires_a_title_and_url_citation() -> None:
     with pytest.raises(ValidationError, match="must include a citation title and URL"):
         EventSignal(
@@ -314,6 +372,29 @@ def test_confirmed_event_requires_a_title_and_url_citation() -> None:
             symbols=["SH.600000"],
             is_confirmed=True,
         )
+
+
+def test_completed_close_below_prior_bar_support_reaches_downside_decision() -> None:
+    prior_closes = [10.0] * 20
+    closes = [*prior_closes, 9.0]
+    bars = pd.DataFrame(
+        {
+            "date": pd.date_range("2026-06-01", periods=len(closes), freq="D"),
+            "open": closes,
+            "high": [close + 0.5 for close in closes],
+            "low": [close - 0.5 for close in closes],
+            "close": closes,
+            "volume": [1_000.0] * len(closes),
+        }
+    )
+    analysis_input = confirmed_bullish_input().model_copy(
+        update={"technical": calculate_technical_snapshot(bars)}
+    )
+
+    recommendations = RecommendationEngine().recommend(analysis_input)
+
+    assert analysis_input.technical.support_20 == pytest.approx(9.5)
+    assert {item.action for item in recommendations} == {Action.AVOID}
 
 
 def test_confirmed_negative_event_recommends_reduce_or_avoid() -> None:

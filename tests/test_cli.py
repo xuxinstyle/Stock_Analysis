@@ -1,11 +1,16 @@
+from datetime import UTC, date, datetime
 from importlib.resources import files
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from stock_research.cli import app, build_services
+from stock_research.cli import active_stock_context, app, build_services
+from stock_research.domain.enums import RunStatus
+from stock_research.domain.models import DailyReport
 from stock_research.services.report_store import ReportStore
+
+from test_report_builder import FakeMarketData
 
 
 TEST_DATA_DIR = Path(__file__).parent / "fixtures"
@@ -35,6 +40,8 @@ def test_generate_writes_three_formats_without_network_requests(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    monkeypatch.setattr("stock_research.cli.AkShareMarketDataProvider", lambda: FakeMarketData())
+    assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
 
     result = runner.invoke(
         app, ["generate", "--input", str(TEST_DATA_DIR / "daily_research_request.json")]
@@ -51,6 +58,8 @@ def test_generate_writes_three_formats_without_network_requests(
 
 def test_generate_persists_the_report_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    monkeypatch.setattr("stock_research.cli.AkShareMarketDataProvider", lambda: FakeMarketData())
+    assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
     original_save = ReportStore.save
     saves = 0
 
@@ -114,6 +123,22 @@ def test_import_config_replaces_the_stock_set_atomically(
     assert [stock.symbol for stock in build_services().configuration.list_stocks()] == ["HK.00700"]
 
 
+def test_active_stock_context_includes_industry_and_optional_holding_risk_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
+
+    context = active_stock_context()
+
+    a_share = next(stock for stock in context if stock["symbol"] == "SH.600000")
+    no_holding = next(stock for stock in context if stock["symbol"] == "SZ.000001")
+    assert a_share["industry"]
+    assert a_share["holding"]["risk_profile"] == "balanced"
+    assert no_holding["industry"] is None
+    assert no_holding["holding"] is None
+
+
 def test_import_config_reports_malformed_yaml_without_replacing_prior_configuration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -143,6 +168,8 @@ def test_reports_prints_the_recorded_status_for_each_date(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    monkeypatch.setattr("stock_research.cli.AkShareMarketDataProvider", lambda: FakeMarketData())
+    assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
     assert (
         runner.invoke(
             app, ["generate", "--input", str(TEST_DATA_DIR / "daily_research_request.json")]
@@ -157,11 +184,51 @@ def test_reports_prints_the_recorded_status_for_each_date(
     assert "success" in result.stdout
 
 
+def test_report_displays_a_selected_saved_report_without_generating(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    ReportStore(tmp_path / "reports").save(
+        DailyReport(
+            report_date=date(2026, 7, 21),
+            generated_at=datetime(2026, 7, 21, 1, 0, tzinfo=UTC),
+            run_status=RunStatus.SUCCESS,
+            analyses=[],
+        )
+    )
+
+    result = runner.invoke(app, ["report", "2026-07-21"])
+
+    assert result.exit_code == 0
+    assert '"report_date": "2026-07-21"' in result.stdout
+    assert '"run_status": "success"' in result.stdout
+
+
+def test_report_returns_not_found_for_a_missing_saved_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+
+    result = runner.invoke(app, ["report", "2026-07-21"])
+
+    assert result.exit_code == 1
+    assert "report not found for 2026-07-21" in result.stdout
+    assert not (tmp_path / "reports" / "reports.sqlite3").exists()
+
+
 def test_help_exposes_only_the_safe_research_and_configuration_commands() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    for command in ("init", "import-config", "validate-input", "generate", "reports", "serve"):
+    for command in (
+        "init",
+        "import-config",
+        "validate-input",
+        "generate",
+        "reports",
+        "report",
+        "serve",
+    ):
         assert command in result.stdout
     for prohibited in ("buy", "sell", "broker", "order", "credential"):
         assert prohibited not in result.stdout.lower()

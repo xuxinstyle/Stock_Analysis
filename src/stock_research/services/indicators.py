@@ -60,8 +60,8 @@ def calculate_technical_snapshot(bars: pd.DataFrame) -> TechnicalSnapshot:
         bollinger_middle=latest_sma_20,
         bollinger_upper=_optional((bollinger_middle + 2 * bollinger_deviation).loc[latest]),
         volume_ratio_20=_ratio(frame.loc[latest, "volume"], volume_mean.loc[latest]),
-        support_20=_optional(frame["low"].rolling(20).min().loc[latest]),
-        resistance_20=_optional(frame["high"].rolling(20).max().loc[latest]),
+        support_20=_optional(frame["low"].shift(1).rolling(20).min().loc[latest]),
+        resistance_20=_optional(frame["high"].shift(1).rolling(20).max().loc[latest]),
         realized_volatility_20=_optional(realized_volatility.loc[latest]),
         trend=_trend(latest_close, latest_sma_20, latest_sma_60),
     )

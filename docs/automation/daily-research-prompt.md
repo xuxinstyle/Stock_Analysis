@@ -12,10 +12,10 @@ place trades.
 - Record data gaps rather than inventing information.
 - Do not use or request API keys, credentials, or an operating-system scheduler.
 - Research only the active configured A-share and Hong Kong subjects. Query the SQLite-backed persisted active stock list, not a YAML configuration file.
-- The existing local application-service invocation below reads the same app home and repository used by `DailyRunService` and emits active symbol, name, and market values:
+- The existing local application-service invocation below reads the same app home and repository used by `DailyRunService` and emits active symbol, name, market, industry, and optional holding-risk context:
 
   ```powershell
-  python -c 'from stock_research.cli import build_services; import json; print(json.dumps([dict(symbol=stock.symbol, name=stock.name, market=stock.market.value) for stock in build_services().configuration.list_stocks()], ensure_ascii=False))'
+  python -c 'from stock_research.cli import active_stock_context; import json; print(json.dumps(active_stock_context(), ensure_ascii=False))'
   ```
 
   If the SQLite-backed list is empty or unavailable, stop and record that configuration is the
@@ -104,10 +104,12 @@ For every `evidence` entry include all of these schema fields:
 }
 ```
 
-For each event, include `title`, `occurred_at`, `direction`, `summary`, and `symbols`.
+For each event, include `title`, `occurred_at`, `direction`, `summary`, `symbols`, and `scope`.
 Set `is_confirmed` to `true` only when it has a cited source, and then also include
 `citation_title` and `citation_url`. Otherwise set `is_confirmed` to `false` and say
-`unverified` in the event summary. Never invent citations.
+`unverified` in the event summary. Use `local` only for an event on the configured subject;
+use `international` for overseas or peer context. International events are context only and must
+never directly determine a buy, reduce, or avoid view. Never invent citations.
 
 ## Local validation and report handoff
 

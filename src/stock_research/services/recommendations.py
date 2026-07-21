@@ -7,6 +7,7 @@ from stock_research.domain.enums import (
     Credibility,
     Direction,
     EvidenceCategory,
+    EventScope,
     Horizon,
     RiskLevel,
     Trend,
@@ -20,6 +21,33 @@ _POSITION_LIMITS = {
     Horizon.SHORT: "≤10%",
     Horizon.MEDIUM: "≤15%",
     Horizon.LONG: "≤20%",
+}
+_RISK_PROFILE_LIMITS = {
+    "conservative": {
+        Horizon.SHORT: "≤5%",
+        Horizon.MEDIUM: "≤10%",
+        Horizon.LONG: "≤15%",
+    },
+    "balanced": _POSITION_LIMITS,
+    "aggressive": {
+        Horizon.SHORT: "≤15%",
+        Horizon.MEDIUM: "≤20%",
+        Horizon.LONG: "≤25%",
+    },
+}
+_HORIZON_GUIDANCE = {
+    Horizon.SHORT: {
+        "review": "the next one to five completed sessions",
+        "focus": "near-term completed-session confirmation",
+    },
+    Horizon.MEDIUM: {
+        "review": "the next several completed weeks",
+        "focus": "scheduled evidence updates and completed-session trends",
+    },
+    Horizon.LONG: {
+        "review": "the next multi-quarter research cycle",
+        "focus": "fundamental, industry, and policy evidence over time",
+    },
 }
 
 
@@ -35,9 +63,11 @@ class RecommendationEngine:
         return [
             Recommendation(
                 horizon=horizon,
-                position_limit=self._position_limit(horizon, decision[1]),
+                position_limit=self._position_limit(
+                    horizon, decision[1], self._risk_profile(analysis_input)
+                ),
                 holding_impact=holding_impact,
-                **decision[0],
+                **self._for_horizon(decision[0], horizon),
             )
             for horizon in _HORIZONS
         ]
@@ -107,6 +137,7 @@ class RecommendationEngine:
                 for event in analysis_input.events
                 if event.direction is Direction.NEGATIVE
                 and event.is_confirmed
+                and event.scope is EventScope.LOCAL
                 and event.citation_title is not None
                 and event.citation_url is not None
                 and analysis_input.stock.symbol in event.symbols
@@ -246,8 +277,35 @@ class RecommendationEngine:
         return RiskLevel.LOW if volatility < 0.2 else RiskLevel.MEDIUM
 
     @staticmethod
-    def _position_limit(horizon: Horizon, confidence: Confidence) -> str:
-        return "≤5%" if confidence is Confidence.LOW else _POSITION_LIMITS[horizon]
+    def _position_limit(horizon: Horizon, confidence: Confidence, risk_profile: str) -> str:
+        if confidence is Confidence.LOW:
+            return "≤5%"
+        return _RISK_PROFILE_LIMITS[risk_profile][horizon]
+
+    @staticmethod
+    def _risk_profile(analysis_input: RecommendationInput) -> str:
+        holding = analysis_input.stock.holding
+        if holding is None or holding.risk_profile is None:
+            return "balanced"
+        return holding.risk_profile
+
+    @staticmethod
+    def _for_horizon(decision: dict[str, object], horizon: Horizon) -> dict[str, object]:
+        guidance = _HORIZON_GUIDANCE[horizon]
+        return {
+            **decision,
+            "rationale": [
+                *decision["rationale"],
+                f"{horizon.value.title()} horizon: review {guidance['focus']}.",
+            ],
+            "trigger": f"{decision['trigger']} Horizon review: {guidance['review']}.",
+            "observation_or_target": (
+                f"{decision['observation_or_target']} Horizon focus: {guidance['focus']}."
+            ),
+            "invalidation": (
+                f"{decision['invalidation']} Horizon reassessment: {guidance['review']}."
+            ),
+        }
 
     @staticmethod
     def _holding_impact(analysis_input: RecommendationInput) -> str | None:
