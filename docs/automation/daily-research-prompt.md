@@ -11,11 +11,15 @@ place trades.
 - Never assert return certainty or write an uncited material claim.
 - Record data gaps rather than inventing information.
 - Do not use or request API keys, credentials, or an operating-system scheduler.
-- Research only the active configured A-share and Hong Kong subjects. Read the persisted
-  stock configuration at `$env:STOCK_RESEARCH_HOME/config/stocks.yaml` when that variable
-  is set, otherwise read `.stock-research/config/stocks.yaml`. If it is absent, stop and
-  record that configuration is the blocking data gap; do not silently substitute the example
-  configuration.
+- Research only the active configured A-share and Hong Kong subjects. Query the SQLite-backed persisted active stock list, not a YAML configuration file.
+- The existing local application-service invocation below reads the same app home and repository used by `DailyRunService` and emits active symbol, name, and market values:
+
+  ```powershell
+  python -c 'from stock_research.cli import build_services; import json; print(json.dumps([dict(symbol=stock.symbol, name=stock.name, market=stock.market.value) for stock in build_services().configuration.list_stocks()], ensure_ascii=False))'
+  ```
+
+  If the SQLite-backed list is empty or unavailable, stop and record that configuration is the
+  blocking data gap; do not silently substitute the example configuration.
 - Treat the result as research, not personalized investment advice. Do not change the
   configured stock list, source code, or prior reports.
 
@@ -32,17 +36,19 @@ place trades.
    Use reputable secondary reporting only when a primary source is unavailable, and give it
    lower credibility.
 4. For each configured symbol, research and cite:
-   - exchange and company disclosures, earnings or operating context, and company news;
+   - exchange/company disclosures, earnings or operating context, and company news;
    - last-completed-session price and volume context;
-   - industry conditions, sector demand/supply, and relevant product or commodity prices;
+   - industry conditions, sector demand/supply, and sector/product prices;
    - Chinese, Hong Kong, or other applicable policy and regulatory developments;
    - US peers, US market drivers, and international transmission channels that could affect
      the subject or its industry.
 5. For every material claim, retain an evidence record with its title, URL, source name,
-   publication time (when supplied), retrieval time, direction, credibility, category, summary,
-   and affected symbol. `credibility` is `3` for a primary source, `2` for a reputable
+   publication time, retrieval time, direction, credibility, category, summary, and affected
+   symbol. Use `null` for an unavailable publication time. `credibility` is `3` for a primary source, `2` for a reputable
    secondary source, and `1` for a low-confidence source. Use only these categories:
    `company`, `industry`, `policy`, `news`, `international`, and `product_price`.
+
+Every evidence record must include title, URL, source name, publication time, retrieval time, direction, credibility, category, summary, and affected symbol.
 6. Reconcile sources before writing. Explicitly label an item `unverified` when it cannot be
    confirmed, and label the evidence or summary `conflicting` when credible sources materially
    disagree. State what conflicts and what would resolve it. Record data gaps rather than inventing

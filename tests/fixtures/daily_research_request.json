@@ -82,6 +82,78 @@
           "symbols": ["SH.600000"]
         }
       ]
+    },
+    {
+      "symbol": "SZ.000001",
+      "data_as_of": "2026-07-20",
+      "fundamental_summary": "Fixture-only SZ company context with no financial claims.",
+      "industry_summary": "Fixture-only SZ industry context with no financial claims.",
+      "policy_summary": "Fixture-only SZ policy context with no financial claims.",
+      "news_summary": "Fixture-only SZ news context with no financial claims.",
+      "international_summary": "Fixture-only SZ international context with no financial claims.",
+      "product_price_summary": "Fixture-only SZ product-price context with no financial claims.",
+      "events": [
+        {
+          "title": "Example SZ disclosure event",
+          "occurred_at": "2026-07-20T16:10:00+08:00",
+          "direction": "neutral",
+          "summary": "Fixture-only SZ event backed by the cited disclosure source.",
+          "symbols": ["SZ.000001"],
+          "is_confirmed": true,
+          "citation_title": "Example SZ company disclosure",
+          "citation_url": "https://disclosure.example.test/sz/notice-001"
+        }
+      ],
+      "evidence": [
+        {
+          "title": "Example SZ company disclosure",
+          "url": "https://disclosure.example.test/sz/notice-001",
+          "source_name": "Example SZ Exchange",
+          "published_at": "2026-07-20T16:10:00+08:00",
+          "retrieved_at": "2026-07-21T08:25:00+08:00",
+          "category": "company",
+          "direction": "neutral",
+          "credibility": 3,
+          "summary": "Fixture-only SZ company disclosure with no real financial claim.",
+          "symbols": ["SZ.000001"]
+        }
+      ]
+    },
+    {
+      "symbol": "HK.00700",
+      "data_as_of": "2026-07-20",
+      "fundamental_summary": "Fixture-only HK company context with no financial claims.",
+      "industry_summary": "Fixture-only HK industry context with no financial claims.",
+      "policy_summary": "Fixture-only HK policy context with no financial claims.",
+      "news_summary": "Fixture-only HK news context with no financial claims.",
+      "international_summary": "Fixture-only HK international context with no financial claims.",
+      "product_price_summary": "Fixture-only HK product-price context with no financial claims.",
+      "events": [
+        {
+          "title": "Example HK disclosure event",
+          "occurred_at": "2026-07-20T16:20:00+08:00",
+          "direction": "neutral",
+          "summary": "Fixture-only HK event backed by the cited disclosure source.",
+          "symbols": ["HK.00700"],
+          "is_confirmed": true,
+          "citation_title": "Example HK company disclosure",
+          "citation_url": "https://disclosure.example.test/hk/notice-001"
+        }
+      ],
+      "evidence": [
+        {
+          "title": "Example HK company disclosure",
+          "url": "https://disclosure.example.test/hk/notice-001",
+          "source_name": "Example HK Exchange",
+          "published_at": "2026-07-20T16:20:00+08:00",
+          "retrieved_at": "2026-07-21T08:30:00+08:00",
+          "category": "company",
+          "direction": "neutral",
+          "credibility": 3,
+          "summary": "Fixture-only HK company disclosure with no real financial claim.",
+          "symbols": ["HK.00700"]
+        }
+      ]
     }
   ]
 }

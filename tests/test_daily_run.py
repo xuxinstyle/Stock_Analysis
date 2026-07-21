@@ -5,7 +5,7 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from stock_research.cli import app
+from stock_research.cli import app, build_services, load_daily_request
 from stock_research.db import create_engine_at
 from stock_research.domain.enums import RunStatus
 from stock_research.domain.models import StockConfig
@@ -34,10 +34,30 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
 
     prompt = DAILY_RESEARCH_PROMPT.read_text(encoding="utf-8")
     required_instructions = (
+        "09:00 China Standard Time",
+        "last completed trading session",
+        "SQLite-backed persisted active stock list",
+        "same app home and repository used by `DailyRunService`",
+        "python -c 'from stock_research.cli import build_services; import json; print(json.dumps",
+        "dict(symbol=stock.symbol, name=stock.name, market=stock.market.value)",
         "stock-research validate-input",
         "stock-research generate --input",
+        "Prefer primary sources",
+        "exchange/company disclosures",
+        "price and volume context",
+        "sector/product prices",
+        "policy and regulatory developments",
+        "company news",
+        "US peers",
+        "international transmission",
+        "title, URL, source name, publication time, retrieval time, direction, credibility, category, summary",
+        "title`, `occurred_at`, `direction`, `summary`, and `symbols`",
+        "source links",
+        "unverified",
+        "conflicting",
         "Never place orders, connect to brokers, or execute trades.",
         "Never assert return certainty or write an uncited material claim.",
+        "Do not use or request API keys",
         "Record data gaps rather than inventing information.",
         "trigger, observation/target, invalidation, position limit, risk, and confidence",
     )
@@ -55,14 +75,26 @@ def test_fixture_payload_can_be_validated_then_generated_by_cli(
 
     assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
     assert runner.invoke(app, ["validate-input", str(request_path)]).exit_code == 0
+    configured_symbols = {stock.symbol for stock in build_services().configuration.list_stocks()}
+    input_symbols = {research.symbol for research in load_daily_request(request_path).research_inputs}
+    assert input_symbols == configured_symbols
+
     result = runner.invoke(app, ["generate", "--input", str(request_path)])
 
     assert result.exit_code == 0
     report = ReportStore(tmp_path / "reports").load_latest()
     assert report is not None
-    assert report.analyses[0].research is not None
-    assert report.analyses[0].research.evidence[0].url
-    assert report.analyses[0].recommendations[0].invalidation
+    assert {analysis.stock.symbol for analysis in report.analyses} == configured_symbols
+    assert all(analysis.research is not None for analysis in report.analyses)
+    assert all(analysis.research.evidence for analysis in report.analyses if analysis.research)
+    assert all(
+        evidence.url
+        for analysis in report.analyses
+        if analysis.research
+        for evidence in analysis.research.evidence
+    )
+    assert all(analysis.recommendations[0].invalidation for analysis in report.analyses)
+    assert not any("expected exactly one research input" in warning for warning in report.run_warnings)
 
 
 class FakeStockRepository:
