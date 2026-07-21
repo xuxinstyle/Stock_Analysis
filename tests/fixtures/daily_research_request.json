@@ -1,0 +1,87 @@
+{
+  "report_date": "2026-07-21",
+  "generated_at": "2026-07-21T09:00:00+08:00",
+  "research_inputs": [
+    {
+      "symbol": "SH.600000",
+      "data_as_of": "2026-07-20",
+      "fundamental_summary": "Fixture-only fundamental summary with no financial claims.",
+      "industry_summary": "Fixture-only industry summary with no financial claims.",
+      "policy_summary": "Fixture-only domestic policy summary with no financial claims.",
+      "news_summary": "Fixture-only news summary with no financial claims.",
+      "international_summary": "Fixture-only international summary with no financial claims.",
+      "product_price_summary": "Fixture-only product-price summary with no financial claims.",
+      "events": [
+        {
+          "title": "Example disclosure event",
+          "occurred_at": "2026-07-20T16:00:00+08:00",
+          "direction": "neutral",
+          "summary": "Fixture-only event used to demonstrate the expected input structure.",
+          "symbols": ["SH.600000"]
+        }
+      ],
+      "evidence": [
+        {
+          "title": "Example company disclosure",
+          "url": "https://disclosure.example.test/company/notice-001",
+          "source_name": "Example Exchange Disclosure",
+          "published_at": "2026-07-20T16:00:00+08:00",
+          "retrieved_at": "2026-07-21T08:00:00+08:00",
+          "category": "company",
+          "direction": "neutral",
+          "credibility": 3,
+          "summary": "Fixture-only company disclosure with no real financial claim.",
+          "symbols": ["SH.600000"]
+        },
+        {
+          "title": "Example industry source",
+          "url": "https://industry.example.test/briefing/sector-001",
+          "source_name": "Example Industry Institute",
+          "published_at": "2026-07-20T15:00:00+08:00",
+          "retrieved_at": "2026-07-21T08:05:00+08:00",
+          "category": "industry",
+          "direction": "neutral",
+          "credibility": 2,
+          "summary": "Fixture-only industry source with no real financial claim.",
+          "symbols": ["SH.600000"]
+        },
+        {
+          "title": "Example domestic policy source",
+          "url": "https://policy.example.test/notices/policy-001",
+          "source_name": "Example Policy Office",
+          "published_at": "2026-07-20T14:00:00+08:00",
+          "retrieved_at": "2026-07-21T08:10:00+08:00",
+          "category": "policy",
+          "direction": "neutral",
+          "credibility": 3,
+          "summary": "Fixture-only domestic policy source with no real financial claim.",
+          "symbols": ["SH.600000"]
+        },
+        {
+          "title": "Example international source",
+          "url": "https://global.example.test/updates/international-001",
+          "source_name": "Example International Source",
+          "published_at": "2026-07-20T13:00:00+08:00",
+          "retrieved_at": "2026-07-21T08:15:00+08:00",
+          "category": "international",
+          "direction": "neutral",
+          "credibility": 2,
+          "summary": "Fixture-only international source with no real financial claim.",
+          "symbols": ["SH.600000"]
+        },
+        {
+          "title": "Example product-price observation",
+          "url": "https://prices.example.test/observations/product-001",
+          "source_name": "Example Price Bulletin",
+          "published_at": "2026-07-20T12:00:00+08:00",
+          "retrieved_at": "2026-07-21T08:20:00+08:00",
+          "category": "product_price",
+          "direction": "neutral",
+          "credibility": 2,
+          "summary": "Fixture-only product-price observation with no real financial claim.",
+          "symbols": ["SH.600000"]
+        }
+      ]
+    }
+  ]
+}

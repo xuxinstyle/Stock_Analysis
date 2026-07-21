@@ -1,4 +1,4 @@
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
 
 class Market(StrEnum):
@@ -24,3 +24,24 @@ class RiskLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+class Direction(StrEnum):
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    NEGATIVE = "negative"
+
+
+class EvidenceCategory(StrEnum):
+    COMPANY = "company"
+    INDUSTRY = "industry"
+    POLICY = "policy"
+    NEWS = "news"
+    INTERNATIONAL = "international"
+    PRODUCT_PRICE = "product_price"
+
+
+class Credibility(IntEnum):
+    LOW = 1
+    SECONDARY = 2
+    PRIMARY = 3
