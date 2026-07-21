@@ -67,7 +67,7 @@ src/stock_research/
     static/app.css
 tests/
   conftest.py
-  fixtures/research_input.json
+  fixtures/daily_research_request.json
   test_configuration.py
   test_evidence.py
   test_indicators.py
@@ -102,6 +102,7 @@ class Evidence(BaseModel):
     direction: Direction
     credibility: Credibility
     summary: str
+    symbols: list[str]
 
 class StockResearchInput(BaseModel):
     symbol: str
@@ -114,6 +115,11 @@ class StockResearchInput(BaseModel):
     product_price_summary: str
     events: list[EventSignal]
     evidence: list[Evidence]
+
+class DailyRunRequest(BaseModel):
+    report_date: date
+    generated_at: datetime
+    research_inputs: list[StockResearchInput]
 
 class StockAnalysis(BaseModel):
     stock: StockConfig
@@ -192,6 +198,9 @@ dependencies = [
 
 [project.scripts]
 stock-research = "stock_research.cli:app"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "ruff>=0.8"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -332,7 +341,7 @@ git commit -m "feat(config): add validated stock and holding configuration"
 - Modify: `src/stock_research/domain/models.py`
 - Create: `src/stock_research/services/evidence.py`
 - Create: `tests/test_evidence.py`
-- Create: `tests/fixtures/research_input.json`
+- Create: `tests/fixtures/daily_research_request.json`
 
 **Interfaces:**
 - Produces: `Evidence`, `EventSignal`, `StockResearchInput`, `EvidenceService.validate_and_deduplicate()`.
@@ -407,7 +416,7 @@ Expected: PASS, including deduplication, source validation, and required-summary
 - [ ] **Step 5: Commit the research input boundary**
 
 ```bash
-git add src/stock_research/domain src/stock_research/services/evidence.py tests/test_evidence.py tests/fixtures/research_input.json
+git add src/stock_research/domain src/stock_research/services/evidence.py tests/test_evidence.py tests/fixtures/daily_research_request.json
 git commit -m "feat(evidence): validate cited Codex research inputs"
 ```
 
@@ -607,12 +616,6 @@ Expected: FAIL with missing report services.
 - [ ] **Step 3: Implement report orchestration and storage**
 
 ```python
-class DailyRunRequest(BaseModel):
-    report_date: date
-    generated_at: datetime
-    research_inputs: list[StockResearchInput]
-
-
 class DailyRunService:
     def run(self, request: DailyRunRequest) -> DailyReport:
         return self._report_builder.build(
@@ -654,14 +657,14 @@ git commit -m "feat(reports): generate and persist daily research reports"
 
 ```python
 def test_validate_input_prints_the_research_date(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["validate-input", str(TEST_DATA_DIR / "research_input.json")])
+    result = runner.invoke(app, ["validate-input", str(TEST_DATA_DIR / "daily_research_request.json")])
     assert result.exit_code == 0
-    assert "研究输入有效" in result.stdout
+    assert "每日研究请求有效" in result.stdout
 
 
 def test_generate_writes_three_formats(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
-    result = runner.invoke(app, ["generate", "--input", str(TEST_DATA_DIR / "research_input.json")])
+    result = runner.invoke(app, ["generate", "--input", str(TEST_DATA_DIR / "daily_research_request.json")])
     assert result.exit_code == 0
     assert "Markdown" in result.stdout and "HTML" in result.stdout and "JSON" in result.stdout
 ```
@@ -680,8 +683,8 @@ app = typer.Typer(no_args_is_help=True, add_completion=False)
 @app.command("validate-input")
 def validate_input(input_path: Annotated[Path, typer.Argument(exists=True)]) -> None:
     payload = json.loads(input_path.read_text(encoding="utf-8"))
-    StockResearchInput.model_validate(payload)
-    typer.echo("研究输入有效")
+    DailyRunRequest.model_validate(payload)
+    typer.echo("每日研究请求有效")
 
 @app.command("generate")
 def generate(input_path: Annotated[Path, typer.Option("--input", exists=True)]) -> None:
@@ -718,7 +721,7 @@ git commit -m "feat(cli): add report generation and management commands"
 - Create: `tests/test_web.py`
 
 **Interfaces:**
-- Produces: `create_app() -> FastAPI`; routes `GET /`, `GET /reports/{report_date}`, `GET|POST /stocks`, `GET|POST /stocks/new`, `GET|POST /stocks/{symbol}/edit`.
+- Produces: `create_app() -> FastAPI`; routes `GET /`, `GET /reports/{report_date}`, `GET|POST /stocks`, `GET|POST /stocks/new`, `GET|POST /stocks/{symbol}/edit`, and `POST /stocks/{symbol}/delete`.
 - Consumes: `StockRepository`, `ReportRepository`, and Pydantic form conversion; no business-rule duplication in routes/templates.
 
 - [ ] **Step 1: Write HTTP tests for dashboard, source links, and form validation**
@@ -795,7 +798,7 @@ git commit -m "feat(web): add research dashboard and stock configuration"
 ```python
 def test_fixture_payload_can_be_validated_then_generated_by_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
-    result = runner.invoke(app, ["generate", "--input", str(TEST_DATA_DIR / "research_input.json")])
+    result = runner.invoke(app, ["generate", "--input", str(TEST_DATA_DIR / "daily_research_request.json")])
     assert result.exit_code == 0
     report = ReportStore(tmp_path / "reports").load_latest()
     assert report.analyses[0].research.evidence[0].url
@@ -818,7 +821,7 @@ Create a Codex App local project automation through the automation tool, with a 
 
 - [ ] **Step 4: Verify the documented flow locally without a live search run**
 
-Run: `stock-research validate-input tests/fixtures/research_input.json; stock-research generate --input tests/fixtures/research_input.json; python -m pytest tests/test_daily_run.py -v`
+Run: `stock-research validate-input tests/fixtures/daily_research_request.json; stock-research generate --input tests/fixtures/daily_research_request.json; python -m pytest tests/test_daily_run.py -v`
 
 Expected: validation succeeds, report paths print, and all daily-run tests PASS. The automation should be created but need not be manually triggered during this verification.
 
@@ -906,4 +909,4 @@ The plan has no deferred requirements: every created file, public interface, beh
 
 ### Type consistency
 
-All external research enters as `StockResearchInput`; `DailyRunService.run(DailyRunRequest)` creates `DailyReport`; `RecommendationEngine.recommend(RecommendationInput)` exclusively creates `Recommendation`; `ReportStore.save(DailyReport)` creates all output formats. CLI and web depend on these interfaces rather than reimplementing analysis rules.
+All external research enters as `DailyRunRequest.research_inputs` containing `StockResearchInput` items; `DailyRunService.run(DailyRunRequest)` creates `DailyReport`; `RecommendationEngine.recommend(RecommendationInput)` exclusively creates `Recommendation`; `ReportStore.save(DailyReport)` creates all output formats. CLI and web depend on these interfaces rather than reimplementing analysis rules.
