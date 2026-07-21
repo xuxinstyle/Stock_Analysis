@@ -45,6 +45,23 @@ class StockRepository:
             rows = connection.execute(select(stocks).order_by(text("rowid"))).mappings().all()
         return [self._deserialize_stock(dict(row)) for row in rows]
 
+    def replace_all(self, values: list[StockConfig]) -> list[StockConfig]:
+        rows = [
+            {
+                "symbol": stock.symbol,
+                "name": stock.name,
+                "market": stock.market.value,
+                "industry": stock.industry,
+                "holding": self._serialize_holding(stock),
+            }
+            for stock in values
+        ]
+        with self.engine.begin() as connection:
+            connection.execute(stocks.delete())
+            if rows:
+                connection.execute(stocks.insert(), rows)
+        return values
+
     @staticmethod
     def _serialize_holding(stock: StockConfig) -> str | None:
         if stock.holding is None:

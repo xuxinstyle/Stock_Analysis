@@ -29,3 +29,19 @@ Run linting:
 ```powershell
 python -m ruff check .
 ```
+
+## Command line
+
+The command-line interface is limited to research reports and local configuration;
+it has no trading, broker, order, or credential commands. By default its local
+data is stored in `.stock-research` below the current directory. Set
+`STOCK_RESEARCH_HOME` to use an explicit alternative location.
+
+```powershell
+stock-research init
+stock-research import-config .\.stock-research\config\stocks.yaml
+stock-research validate-input .\tests\fixtures\daily_research_request.json
+stock-research generate --input .\tests\fixtures\daily_research_request.json
+stock-research reports
+stock-research serve --port 8000
+```

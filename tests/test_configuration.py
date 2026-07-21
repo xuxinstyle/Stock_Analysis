@@ -51,6 +51,37 @@ def test_yaml_import_validates_all_rows_before_persisting(tmp_path: Path) -> Non
     assert service.list_stocks() == []
 
 
+def test_yaml_replacement_removes_stale_stocks_and_keeps_prior_set_on_invalid_input(
+    tmp_path: Path,
+) -> None:
+    repository = StockRepository(create_engine_at(tmp_path / "app.sqlite3"))
+    service = ConfigurationService(repository)
+    service.import_yaml(TEST_DATA_DIR / "stocks.yaml")
+    replacement = tmp_path / "replacement.yaml"
+    replacement.write_text(
+        "stocks:\n"
+        "  - symbol: HK.00700\n"
+        "    name: Tencent\n"
+        "    market: hong_kong\n",
+        encoding="utf-8",
+    )
+    invalid = tmp_path / "invalid.yaml"
+    invalid.write_text(
+        "stocks:\n"
+        "  - symbol: invalid\n"
+        "    name: Broken\n"
+        "    market: hong_kong\n",
+        encoding="utf-8",
+    )
+
+    service.replace_from_yaml(replacement)
+
+    assert [stock.symbol for stock in service.list_stocks()] == ["HK.00700"]
+    with pytest.raises(ValidationError):
+        service.replace_from_yaml(invalid)
+    assert [stock.symbol for stock in service.list_stocks()] == ["HK.00700"]
+
+
 def test_upsert_replaces_stock_with_matching_symbol(tmp_path: Path) -> None:
     repository = StockRepository(create_engine_at(tmp_path / "app.sqlite3"))
     original = StockConfig(symbol="SZ.000001", name="平安银行", market=Market.A_SHARE)
