@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from stock_research.domain.enums import RunStatus
@@ -8,14 +9,41 @@ from stock_research.services.report_store import ReportStore
 from test_report_builder import FakeMarketData, make_request, make_research, make_stock
 
 
+def _between(content: str, start: str, end: str) -> str:
+    start_index = content.find(start)
+    assert start_index >= 0, f"missing start marker: {start}"
+    end_index = content.find(end, start_index + len(start))
+    assert end_index >= 0, f"missing end marker: {end}"
+    return content[start_index:end_index]
+
+
 def make_partial_report():
     report = ReportBuilder().build(make_request(make_research()), [make_stock()], FakeMarketData())
-    analysis = report.analyses[0].model_copy(
-        update={"data_gaps": ["Fixture price input was unavailable for one session."]}
+    original_analysis = report.analyses[0]
+    assert original_analysis.research is not None
+    assert original_analysis.previous_day is not None
+    assert original_analysis.technical is not None
+    analysis = original_analysis.model_copy(
+        update={
+            "research": original_analysis.research.model_copy(
+                update={"data_as_of": date(2026, 8, 6)}
+            ),
+            "previous_day": original_analysis.previous_day.model_copy(
+                update={"data_as_of": date(2026, 8, 5)}
+            ),
+            "technical": original_analysis.technical.model_copy(
+                update={"data_as_of": date(2026, 8, 4)}
+            ),
+            "data_gaps": ["Fixture price input was unavailable for one session."],
+        }
     )
+    market_status = report.market_statuses[0].model_copy(update={"data_as_of": date(2026, 8, 7)})
     return report.model_copy(
         update={
+            "report_date": date(2026, 8, 10),
+            "generated_at": datetime(2026, 8, 11, 1, 2, 3, tzinfo=UTC),
             "run_status": RunStatus.PARTIAL,
+            "market_statuses": [market_status],
             "run_warnings": ["Fixture source coverage is incomplete."],
             "analyses": [analysis],
         }
@@ -37,19 +65,61 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
     assert analysis.technical is not None
     source_url = str(analysis.research.evidence[0].url)
     market_status = report.market_statuses[0]
+    assert market_status.data_as_of is not None
+    date_contract = {
+        "report": report.report_date.isoformat(),
+        "generated": report.generated_at.date().isoformat(),
+        "market": market_status.data_as_of.isoformat(),
+        "research": analysis.research.data_as_of.isoformat(),
+        "previous_day": analysis.previous_day.data_as_of.isoformat(),
+        "technical": analysis.technical.data_as_of.isoformat(),
+    }
+    assert len(set(date_contract.values())) == len(date_contract)
+
+    expected_payload = report.model_dump(mode="json")
+    assert payload["report_date"] == expected_payload["report_date"]
+    assert payload["generated_at"] == expected_payload["generated_at"]
+    assert payload["market_statuses"][0]["data_as_of"] == date_contract["market"]
+    assert analysis_payload["research"]["data_as_of"] == date_contract["research"]
+    assert analysis_payload["previous_day"]["data_as_of"] == date_contract["previous_day"]
+    assert analysis_payload["technical"]["data_as_of"] == date_contract["technical"]
+
+    assert f"# 每日股票研究报告 — {date_contract['report']}" in markdown
+    assert f"- 生成时间：{report.generated_at.isoformat()}" in markdown
+    assert (
+        f"- {market_status.market.value}: {market_status.status}; {date_contract['market']};"
+        in markdown
+    )
+    assert f"- 研究数据截至：{date_contract['research']}" in markdown
+    previous_markdown = _between(markdown, "## 前日表现与原因", "## 基本面分析")
+    assert f"数据截至 {date_contract['previous_day']}，收盘" in previous_markdown
+    technical_markdown = _between(markdown, "## 技术面分析", "## 政策分析")
+    assert f"数据截至 {date_contract['technical']}，收盘" in technical_markdown
+
+    assert f"<dt>report_date</dt><dd>{date_contract['report']}</dd>" in html
+    assert f"<dt>generated_at</dt><dd>{report.generated_at.isoformat()}</dd>" in html
+    market_html = _between(html, "<section><h2>市场状态</h2>", "<section><h2>全局风险</h2>")
+    assert (
+        f"<strong>{market_status.market.value}</strong> · {market_status.status} · "
+        f"{date_contract['market']} ·" in market_html
+    )
+    research_html = _between(html, "<section><h2>消息面分析</h2>", "<section><h2>突发事件</h2>")
+    assert f"<strong>研究数据截至：</strong>{date_contract['research']}" in research_html
+    previous_html = _between(
+        html, "<section><h2>前日表现与原因</h2>", "<section><h2>基本面分析</h2>"
+    )
+    assert f"<dt>data_as_of</dt><dd>{date_contract['previous_day']}</dd>" in previous_html
+    technical_html = _between(html, "<section><h2>技术面分析</h2>", "<section><h2>政策分析</h2>")
+    assert f"<dt>data_as_of</dt><dd>{date_contract['technical']}</dd>" in technical_html
+
     shared_facts = (
         analysis.stock.symbol,
         analysis.stock.name,
-        report.report_date.isoformat(),
-        report.generated_at.date().isoformat(),
         market_status.market.value,
         market_status.status,
         report.run_warnings[0],
         analysis.data_gaps[0],
         report.disclaimer,
-        analysis.research.data_as_of.isoformat(),
-        analysis.previous_day.data_as_of.isoformat(),
-        analysis.technical.data_as_of.isoformat(),
         source_url,
     )
     for content in (json_report, markdown, html):
