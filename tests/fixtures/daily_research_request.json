@@ -17,7 +17,8 @@
           "occurred_at": "2026-07-20T16:00:00+08:00",
           "direction": "neutral",
           "summary": "Fixture-only event used to demonstrate the expected input structure.",
-          "symbols": ["SH.600000"]
+          "symbols": ["SH.600000"],
+          "scope": "local"
         }
       ],
       "evidence": [
@@ -99,6 +100,7 @@
           "direction": "neutral",
           "summary": "Fixture-only SZ event backed by the cited disclosure source.",
           "symbols": ["SZ.000001"],
+          "scope": "local",
           "is_confirmed": true,
           "citation_title": "Example SZ company disclosure",
           "citation_url": "https://disclosure.example.test/sz/notice-001"
@@ -135,6 +137,7 @@
           "direction": "neutral",
           "summary": "Fixture-only HK event backed by the cited disclosure source.",
           "symbols": ["HK.00700"],
+          "scope": "local",
           "is_confirmed": true,
           "citation_title": "Example HK company disclosure",
           "citation_url": "https://disclosure.example.test/hk/notice-001"

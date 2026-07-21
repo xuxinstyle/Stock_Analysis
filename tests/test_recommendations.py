@@ -305,6 +305,7 @@ def test_unconfirmed_negative_event_does_not_directly_action_recommendation() ->
                     direction=Direction.NEGATIVE,
                     summary="An unconfirmed report could weaken the near-term operating outlook.",
                     symbols=["SH.600000"],
+                    scope="local",
                 )
             ]
         }
@@ -325,6 +326,7 @@ def test_foreign_confirmed_negative_event_does_not_directly_action_recommendatio
                     direction=Direction.NEGATIVE,
                     summary="A confirmed foreign event must remain reportable but not action this stock.",
                     symbols=["HK.00700"],
+                    scope="international",
                     is_confirmed=True,
                     citation_title="Hong Kong regulator notice",
                     citation_url="https://example.com/hk-regulator-notice",
@@ -370,6 +372,7 @@ def test_confirmed_event_requires_a_title_and_url_citation() -> None:
             direction=Direction.NEGATIVE,
             summary="A confirmed event needs explicit source attribution before recommendation use.",
             symbols=["SH.600000"],
+            scope="local",
             is_confirmed=True,
         )
 
@@ -407,6 +410,7 @@ def test_confirmed_negative_event_recommends_reduce_or_avoid() -> None:
                     direction=Direction.NEGATIVE,
                     summary="A confirmed event materially weakens the near-term operating outlook.",
                     symbols=["SH.600000"],
+                    scope="local",
                     is_confirmed=True,
                     citation_title="Regulator enforcement notice",
                     citation_url="https://example.com/regulator-enforcement-notice",

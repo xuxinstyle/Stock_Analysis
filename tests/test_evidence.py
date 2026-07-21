@@ -100,6 +100,23 @@ def test_research_input_rejects_event_for_another_stock() -> None:
         StockResearchInput.model_validate(payload)
 
 
+def test_research_input_rejects_confirmed_negative_event_without_scope() -> None:
+    payload = valid_research_payload(symbol="SH.600000")
+    event = payload["events"][0]  # type: ignore[index]
+    event.update(  # type: ignore[union-attr]
+        {
+            "direction": "negative",
+            "is_confirmed": True,
+            "citation_title": "Confirmed local disclosure",
+            "citation_url": "https://example.test/local-disclosure",
+        }
+    )
+    event.pop("scope", None)  # type: ignore[union-attr]
+
+    with pytest.raises(ValidationError, match="scope"):
+        StockResearchInput.model_validate(payload)
+
+
 def test_research_input_rejects_us_subject_symbol() -> None:
     payload = valid_research_payload(symbol="US.AAPL")
     payload["evidence"] = [

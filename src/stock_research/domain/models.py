@@ -89,7 +89,7 @@ class EventSignal(BaseModel):
     direction: Direction
     summary: str = Field(min_length=20, max_length=1500)
     symbols: list[str] = Field(min_length=1)
-    scope: EventScope = EventScope.LOCAL
+    scope: EventScope
     is_confirmed: bool = False
     citation_title: str | None = Field(default=None, min_length=4, max_length=240)
     citation_url: HttpUrl | None = None

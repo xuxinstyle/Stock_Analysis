@@ -90,6 +90,7 @@ def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Pat
         direction=Direction.NEGATIVE,
         summary="A confirmed fixture event with enough detail for multi-format parity testing.",
         symbols=[stock.symbol],
+        scope="local",
         is_confirmed=True,
         citation_title="Confirmed exchange event notice",
         citation_url="https://example.test/confirmed-event",
