@@ -17,6 +17,7 @@ from stock_research.domain.models import (
     DailyReport,
     DailyRunRequest,
     MarketStatus,
+    MarketSession,
     PreviousDayPerformance,
     Recommendation,
     RecommendationInput,
@@ -84,7 +85,7 @@ class ReportBuilder:
             research = research.model_copy(update={"evidence": evidence})
             technical = calculate_technical_snapshot(bars)
             chronology_gap = self._chronology_gap(
-                stock, technical.data_as_of, research.data_as_of, request.report_date
+                stock, technical.data_as_of, research.data_as_of, request
             )
             if chronology_gap is not None:
                 warnings.append(chronology_gap)
@@ -125,7 +126,7 @@ class ReportBuilder:
             report_date=request.report_date,
             generated_at=request.generated_at,
             run_status=status,
-            market_statuses=self._market_statuses(stocks, analyses, request.report_date),
+            market_statuses=self._market_statuses(stocks, analyses, request),
             global_risks=self._global_risks(analyses),
             run_warnings=warnings,
             analyses=analyses,
@@ -155,7 +156,7 @@ class ReportBuilder:
             return self._gap_analysis(stock, combined_gap, research=research)
         technical = calculate_technical_snapshot(bars)
         chronology_gap = self._chronology_gap(
-            stock, technical.data_as_of, research.data_as_of, request.report_date
+            stock, technical.data_as_of, research.data_as_of, request
         )
         gaps = [gap]
         reason = research.news_summary
@@ -235,11 +236,11 @@ class ReportBuilder:
         stock: StockConfig,
         technical_date: date,
         research_date: date,
-        report_date: date,
+        request: DailyRunRequest,
     ) -> str | None:
-        expected_date = self._session_calendar.latest_completed_session(stock.market, report_date)
+        expected_date = self._expected_session(request, stock.market)
         if expected_date is None:
-            return f"{stock.symbol}: completed-session status is unavailable for {report_date}."
+            return f"{stock.symbol}: completed-session status is unavailable for {request.report_date}."
         if technical_date != research_date:
             return (
                 f"{stock.symbol}: date mismatch; technical date {technical_date} does not equal "
@@ -248,9 +249,19 @@ class ReportBuilder:
         if technical_date != expected_date:
             return (
                 f"{stock.symbol}: stale data; technical and research dates are {technical_date}; "
-                f"expected completed session {expected_date} before report date {report_date}."
+                f"expected completed session {expected_date} before report date {request.report_date}."
             )
         return None
+
+    def _expected_session(self, request: DailyRunRequest, market: Market) -> date | None:
+        metadata = self._request_session(request, market)
+        if metadata is not None:
+            return metadata.completed_session
+        return self._session_calendar.latest_completed_session(market, request.report_date)
+
+    @staticmethod
+    def _request_session(request: DailyRunRequest, market: Market) -> MarketSession | None:
+        return next((item for item in request.market_sessions if item.market is market), None)
 
     @staticmethod
     def _percent_change(current: float, previous: float | None) -> float | None:
@@ -262,7 +273,7 @@ class ReportBuilder:
         self,
         stocks: Sequence[StockConfig],
         analyses: Sequence[StockAnalysis],
-        report_date: date,
+        request: DailyRunRequest,
     ) -> list[MarketStatus]:
         statuses: list[MarketStatus] = []
         for market in (Market.A_SHARE, Market.HONG_KONG):
@@ -271,7 +282,8 @@ class ReportBuilder:
                 continue
             matching = [analysis for analysis in analyses if analysis.stock.symbol in symbols]
             observed = [analysis for analysis in matching if analysis.technical is not None]
-            expected_date = self._session_calendar.latest_completed_session(market, report_date)
+            metadata = self._request_session(request, market)
+            expected_date = self._expected_session(request, market)
             available = [
                 analysis
                 for analysis in observed
@@ -281,7 +293,13 @@ class ReportBuilder:
                 and analysis.technical.data_as_of == expected_date
                 and analysis.research.data_as_of == expected_date
             ]
-            if len(available) == len(symbols):
+            if metadata is not None and metadata.is_closed and len(available) == len(symbols):
+                state = "closed"
+                message = (
+                    f"Market was closed on report date {request.report_date}; prior completed session "
+                    "data is current for all configured stocks."
+                )
+            elif len(available) == len(symbols):
                 state = "available"
                 message = "Completed session data is current for all configured stocks."
             elif available:

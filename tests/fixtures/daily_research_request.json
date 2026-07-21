@@ -1,6 +1,18 @@
 {
   "report_date": "2026-07-21",
   "generated_at": "2026-07-21T09:00:00+08:00",
+  "market_sessions": [
+    {
+      "market": "a_share",
+      "completed_session": "2026-07-20",
+      "is_closed": false
+    },
+    {
+      "market": "hong_kong",
+      "completed_session": "2026-07-20",
+      "is_closed": false
+    }
+  ],
   "research_inputs": [
     {
       "symbol": "SH.600000",

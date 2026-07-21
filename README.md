@@ -41,6 +41,9 @@ context from that repository, use the same read-only service call as the Codex p
 python -c 'from stock_research.cli import active_stock_context; import json; print(json.dumps(active_stock_context(), ensure_ascii=False))'
 ```
 
+This lookup reads only an existing persisted configuration database. If it is absent, it reports a
+configuration block and does not create an app-home directory, database, or report artifact.
+
 By default, configuration state and report history are stored locally under `.stock-research/` in
 the current directory. Set `STOCK_RESEARCH_HOME` before every command and automation run to use a
 different local app home. The app home contains SQLite databases and generated reports; it does
@@ -98,6 +101,11 @@ Read the dates separately: `report_date` is the intended research day, `generate
 request was assembled, and each market/research/technical `data_as_of` value identifies the last
 data actually used. A holiday, suspension, delayed source, or unavailable quote can therefore make
 the data-as-of date earlier than the report date.
+
+`DailyRunRequest` can provide `market_sessions` facts for each configured market. Each fact has a
+`completed_session` date and `is_closed` boolean for the report date. Explicit request facts take
+priority over the weekday fallback: a closed market with current prior-session data is shown as
+`closed`, while missing or stale coverage remains `partial` or `unavailable`.
 
 Run statuses mean:
 

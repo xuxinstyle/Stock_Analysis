@@ -12,7 +12,7 @@ import typer
 import yaml
 from pydantic import ValidationError
 
-from stock_research.db import create_engine_at
+from stock_research.db import create_engine_at, create_read_only_engine_at
 from stock_research.domain.models import DailyRunRequest
 from stock_research.repositories.runs import RunRepository
 from stock_research.repositories.stocks import StockRepository
@@ -58,8 +58,20 @@ def build_services(home: Path | None = None) -> Services:
 
 
 def active_stock_context(home: Path | None = None) -> list[dict[str, object]]:
+    root = (home or app_home()).resolve()
+    database = root / "data" / "stock_research.sqlite3"
+    try:
+        engine = create_read_only_engine_at(database)
+    except FileNotFoundError as error:
+        raise RuntimeError("no persisted configuration database is available") from error
+    repository = StockRepository(engine, initialize=False)
+    try:
+        stocks = repository.list_all()
+    finally:
+        engine.dispose()
+
     context: list[dict[str, object]] = []
-    for stock in build_services(home).configuration.list_stocks():
+    for stock in stocks:
         holding = stock.holding
         context.append(
             {

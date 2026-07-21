@@ -186,10 +186,24 @@ class StockResearchInput(BaseModel):
         return self
 
 
+class MarketSession(BaseModel):
+    market: Market
+    completed_session: date
+    is_closed: bool
+
+
 class DailyRunRequest(BaseModel):
     report_date: date
     generated_at: datetime
     research_inputs: list[StockResearchInput]
+    market_sessions: list[MarketSession] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_market_sessions(self) -> Self:
+        markets = [session.market for session in self.market_sessions]
+        if len(markets) != len(set(markets)):
+            raise ValueError("market session metadata must contain each market at most once")
+        return self
 
 
 class PreviousDayPerformance(BaseModel):
@@ -207,7 +221,7 @@ class PreviousDayPerformance(BaseModel):
 class MarketStatus(BaseModel):
     market: Market
     data_as_of: date | None = None
-    status: Literal["available", "partial", "unavailable"]
+    status: Literal["available", "closed", "partial", "unavailable"]
     message: str = Field(min_length=1)
 
 

@@ -27,9 +27,11 @@ place trades.
 
 1. Read every active configured symbol, name, market, industry, and holding context. Cover
    both configured markets: A-share (`SH.` / `SZ.`) and Hong Kong (`HK.`), when present.
-2. Identify each market's last completed trading session before the run. Label holidays,
-   suspensions, delayed quotes, and unavailable data as data gaps; never present an incomplete
-   session as a completed one.
+2. Identify each market's last completed trading session before the run. Record one
+   `market_sessions` entry for each configured market with its `completed_session` and
+   `is_closed` status on the report date. A closed market must use its prior completed session;
+   label holidays, suspensions, delayed quotes, and unavailable data as data gaps; never present
+   an incomplete session as a completed one.
 3. Use web search and inspect the source pages. Prefer primary sources in this order when
    available: exchange filings and announcements, company investor-relations disclosures,
    government or regulator publications, and official market or product-price publications.
@@ -65,6 +67,13 @@ derives recommendations from the cited research.
 {
   "report_date": "YYYY-MM-DD",
   "generated_at": "YYYY-MM-DDTHH:MM:SS+08:00",
+  "market_sessions": [
+    {
+      "market": "a_share or hong_kong",
+      "completed_session": "YYYY-MM-DD",
+      "is_closed": false
+    }
+  ],
   "research_inputs": [
     {
       "symbol": "SH.600000 or SZ.000001 or HK.00700",
@@ -85,7 +94,9 @@ derives recommendations from the cited research.
 Create one `StockResearchInput` for every active configured symbol. Fill all six research
 summaries and events for each subject. Each summary must be nonblank; a nonblank gap statement
 is required when evidence is unavailable. Do not create a fabricated citation to make a summary
-appear complete.
+appear complete. Include at most one `market_sessions` entry for each configured market. Set
+`is_closed` to `true` only when that market is closed on `report_date`, and use the last completed
+session date rather than treating the market as available on the report date.
 
 For every `evidence` entry include all of these schema fields:
 

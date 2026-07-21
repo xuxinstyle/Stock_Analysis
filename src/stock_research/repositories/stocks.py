@@ -24,9 +24,10 @@ class DuplicateStockError(ValueError):
 
 
 class StockRepository:
-    def __init__(self, engine: Engine) -> None:
+    def __init__(self, engine: Engine, *, initialize: bool = True) -> None:
         self.engine = engine
-        metadata.create_all(engine)
+        if initialize:
+            metadata.create_all(engine)
 
     def upsert(self, stock: StockConfig) -> StockConfig:
         values = {

@@ -1,13 +1,17 @@
+import json
 from datetime import UTC, date, datetime
 from importlib.resources import files
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from stock_research.cli import active_stock_context, app, build_services
-from stock_research.domain.enums import RunStatus
-from stock_research.domain.models import DailyReport
+from stock_research.db import create_engine_at
+from stock_research.domain.enums import Market, RunStatus
+from stock_research.domain.models import DailyReport, DailyRunRequest, StockConfig
+from stock_research.repositories.stocks import StockRepository
 from stock_research.services.report_store import ReportStore
 
 from test_report_builder import FakeMarketData
@@ -25,6 +29,20 @@ def test_validate_input_prints_the_research_date() -> None:
     assert result.exit_code == 0
     assert "\u6bcf\u65e5\u7814\u7a76\u8bf7\u6c42\u6709\u6548" in result.stdout
     assert "2026-07-21" in result.stdout
+
+
+def test_daily_request_fixture_declares_open_market_session_metadata() -> None:
+    request = DailyRunRequest.model_validate_json(
+        (TEST_DATA_DIR / "daily_research_request.json").read_text(encoding="utf-8")
+    )
+
+    assert {
+        (session.market.value, session.completed_session, session.is_closed)
+        for session in request.market_sessions
+    } == {
+        ("a_share", date(2026, 7, 20), False),
+        ("hong_kong", date(2026, 7, 20), False),
+    }
 
 
 def test_validate_input_rejects_an_invalid_outer_request(tmp_path: Path) -> None:
@@ -76,6 +94,65 @@ def test_generate_persists_the_report_once(tmp_path: Path, monkeypatch: pytest.M
 
     assert result.exit_code == 0
     assert saves == 1
+
+
+def test_generate_uses_request_market_sessions_for_divergent_closed_markets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "stock_research.cli.AkShareMarketDataProvider",
+        lambda: FakeMarketData(
+            bars_ends={
+                "SH.600000": date(2026, 7, 17),
+                "SZ.000001": date(2026, 7, 17),
+                "HK.00700": date(2026, 7, 20),
+            }
+        ),
+    )
+    payload = json.loads(
+        (TEST_DATA_DIR / "daily_research_request.json").read_text(encoding="utf-8")
+    )
+    payload["market_sessions"] = [
+        {"market": "a_share", "completed_session": "2026-07-17", "is_closed": True},
+        {"market": "hong_kong", "completed_session": "2026-07-20", "is_closed": False},
+    ]
+    for research in payload["research_inputs"]:
+        if research["symbol"].startswith(("SH.", "SZ.")):
+            research["data_as_of"] = "2026-07-17"
+    request_path = tmp_path / "divergent-market-sessions.json"
+    request_path.write_text(json.dumps(payload), encoding="utf-8")
+    assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
+
+    result = runner.invoke(app, ["generate", "--input", str(request_path)])
+
+    report = ReportStore(tmp_path / "reports").load(date(2026, 7, 21))
+    assert result.exit_code == 0
+    assert report is not None
+    assert report.run_status is RunStatus.SUCCESS
+    statuses = {status.market.value: status for status in report.market_statuses}
+    assert statuses["a_share"].status == "closed"
+    assert statuses["a_share"].data_as_of == date(2026, 7, 17)
+    assert statuses["hong_kong"].status == "available"
+    assert statuses["hong_kong"].data_as_of == date(2026, 7, 20)
+    rendered = [
+        (tmp_path / "reports" / "2026-07-21" / filename).read_text(encoding="utf-8")
+        for filename in ("report.json", "report.md", "report.html")
+    ]
+    assert all("closed" in content for content in rendered)
+
+
+def test_daily_request_rejects_duplicate_market_session_metadata() -> None:
+    payload = json.loads(
+        (TEST_DATA_DIR / "daily_research_request.json").read_text(encoding="utf-8")
+    )
+    payload["market_sessions"] = [
+        {"market": "a_share", "completed_session": "2026-07-20", "is_closed": False},
+        {"market": "a_share", "completed_session": "2026-07-20", "is_closed": False},
+    ]
+
+    with pytest.raises(ValidationError, match="market session"):
+        DailyRunRequest.model_validate(payload)
 
 
 def test_init_does_not_overwrite_an_existing_configuration(
@@ -137,6 +214,53 @@ def test_active_stock_context_includes_industry_and_optional_holding_risk_profil
     assert a_share["holding"]["risk_profile"] == "balanced"
     assert no_holding["industry"] is None
     assert no_holding["holding"] is None
+
+
+def test_active_stock_context_reads_existing_configuration_without_creating_artifacts(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "existing-app-home"
+    repository = StockRepository(create_engine_at(home / "data" / "stock_research.sqlite3"))
+    repository.create(
+        StockConfig(
+            symbol="SH.600000",
+            name="Example A Share",
+            market=Market.A_SHARE,
+            industry="Banking",
+        )
+    )
+    before = {path.relative_to(home) for path in home.rglob("*")}
+
+    context = active_stock_context(home)
+
+    assert context == [
+        {
+            "symbol": "SH.600000",
+            "name": "Example A Share",
+            "market": "a_share",
+            "industry": "Banking",
+            "holding": None,
+        }
+    ]
+    assert {path.relative_to(home) for path in home.rglob("*")} == before
+    assert not (home / "reports").exists()
+    assert not (home / "data" / "runs.sqlite3").exists()
+
+
+@pytest.mark.parametrize("create_empty_home", [False, True])
+def test_active_stock_context_blocks_empty_configuration_without_creating_artifacts(
+    tmp_path: Path, create_empty_home: bool
+) -> None:
+    home = tmp_path / "empty-app-home"
+    if create_empty_home:
+        home.mkdir()
+
+    with pytest.raises(RuntimeError, match="no persisted configuration database"):
+        active_stock_context(home)
+
+    assert home.exists() is create_empty_home
+    if create_empty_home:
+        assert not list(home.iterdir())
 
 
 def test_import_config_reports_malformed_yaml_without_replacing_prior_configuration(

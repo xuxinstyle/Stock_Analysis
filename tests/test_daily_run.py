@@ -41,6 +41,10 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
     required_instructions = (
         "09:00 China Standard Time",
         "last completed trading session",
+        "market_sessions",
+        "completed_session",
+        "is_closed",
+        "closed market",
         "SQLite-backed persisted active stock list",
         "same app home and repository used by `DailyRunService`",
         "from stock_research.cli import active_stock_context",
@@ -76,6 +80,8 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
     assert ACTIVE_STOCK_COMMAND in prompt
     assert ACTIVE_STOCK_COMMAND in readme
     assert "stock-research report YYYY-MM-DD" in readme
+    assert "market_sessions" in readme
+    assert "closed" in readme
     assert "$env:STOCK_RESEARCH_HOME/config/stocks.yaml" not in readme
     assert ".stock-research/config/stocks.yaml" not in readme
 
