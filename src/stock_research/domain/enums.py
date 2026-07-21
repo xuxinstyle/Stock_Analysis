@@ -32,6 +32,12 @@ class RiskLevel(StrEnum):
     HIGH = "high"
 
 
+class Confidence(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class Direction(StrEnum):
     POSITIVE = "positive"
     NEUTRAL = "neutral"

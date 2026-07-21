@@ -5,7 +5,17 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_serializer, model_validator
 
-from stock_research.domain.enums import Credibility, Direction, EvidenceCategory, Market, Trend
+from stock_research.domain.enums import (
+    Action,
+    Confidence,
+    Credibility,
+    Direction,
+    EvidenceCategory,
+    Horizon,
+    Market,
+    RiskLevel,
+    Trend,
+)
 
 
 class Holding(BaseModel):
@@ -89,6 +99,32 @@ class Evidence(BaseModel):
     credibility: Credibility
     summary: str = Field(min_length=20, max_length=1500)
     symbols: list[str] = Field(min_length=1)
+
+
+class RecommendationInput(BaseModel):
+    stock: StockConfig
+    technical: TechnicalSnapshot
+    evidence: list[Evidence]
+    events: list[EventSignal]
+
+    @model_validator(mode="after")
+    def validate_evidence_symbols(self) -> Self:
+        if any(self.stock.symbol not in item.symbols for item in self.evidence):
+            raise ValueError("evidence symbols must include recommendation stock symbol")
+        return self
+
+
+class Recommendation(BaseModel):
+    horizon: Horizon
+    action: Action
+    confidence: Confidence
+    risk_level: RiskLevel
+    rationale: list[str] = Field(min_length=1)
+    trigger: str = Field(min_length=1)
+    observation_or_target: str = Field(min_length=1)
+    invalidation: str = Field(min_length=1)
+    position_limit: str = Field(min_length=1)
+    holding_impact: str | None = None
 
 
 class StockResearchInput(BaseModel):
