@@ -203,6 +203,8 @@ class DailyRunRequest(BaseModel):
         markets = [session.market for session in self.market_sessions]
         if len(markets) != len(set(markets)):
             raise ValueError("market session metadata must contain each market at most once")
+        if any(session.completed_session >= self.report_date for session in self.market_sessions):
+            raise ValueError("market session completed_session must precede report_date")
         return self
 
 

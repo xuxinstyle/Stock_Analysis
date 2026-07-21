@@ -155,6 +155,31 @@ def test_daily_request_rejects_duplicate_market_session_metadata() -> None:
         DailyRunRequest.model_validate(payload)
 
 
+@pytest.mark.parametrize(
+    ("completed_session", "is_closed"),
+    [
+        ("2026-07-21", False),
+        ("2026-07-22", True),
+    ],
+)
+def test_daily_request_rejects_non_prior_market_session_metadata(
+    completed_session: str, is_closed: bool
+) -> None:
+    payload = json.loads(
+        (TEST_DATA_DIR / "daily_research_request.json").read_text(encoding="utf-8")
+    )
+    payload["market_sessions"] = [
+        {
+            "market": "a_share",
+            "completed_session": completed_session,
+            "is_closed": is_closed,
+        }
+    ]
+
+    with pytest.raises(ValidationError, match="completed_session must precede report_date"):
+        DailyRunRequest.model_validate(payload)
+
+
 def test_init_does_not_overwrite_an_existing_configuration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
