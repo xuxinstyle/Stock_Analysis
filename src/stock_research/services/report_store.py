@@ -127,6 +127,11 @@ class ReportStore:
         lines = [
             "",
             f"# {analysis.stock.symbol} {analysis.stock.name}",
+            (
+                f"- 研究数据截至：{research.data_as_of.isoformat()}"
+                if research
+                else "- 研究数据截至：不可用"
+            ),
             "",
             "## 前日表现与原因",
             (
@@ -169,6 +174,8 @@ class ReportStore:
         if research and research.events:
             for event in research.events:
                 lines.append(f"- {event.occurred_at.isoformat()} — {event.title}: {event.summary}")
+                if event.citation_title and event.citation_url:
+                    lines.append(f"  - 事件来源：[{event.citation_title}]({event.citation_url})")
         else:
             lines.append("- 无已提供的可验证突发事件。")
         for horizon, heading in (
@@ -190,6 +197,10 @@ class ReportStore:
                         f"- 仓位上限：{recommendation.position_limit}",
                     ]
                 )
+                if recommendation.holding_impact:
+                    lines.append(f"- 持仓影响：{recommendation.holding_impact}")
+                lines.extend(f"- 建议依据标题：{title}" for title in recommendation.evidence_titles)
+                lines.extend(f"- 建议引用：{url}" for url in recommendation.citation_urls)
         lines.extend(["", "## 来源与数据缺口"])
         if research and research.evidence:
             for evidence in research.evidence:

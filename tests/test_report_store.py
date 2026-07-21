@@ -1,7 +1,11 @@
 import json
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from stock_research.db import create_engine_at
+from stock_research.domain.enums import Direction
+from stock_research.domain.models import EventSignal, Holding
 from stock_research.repositories.reports import ReportRepository
 from stock_research.services.report_builder import ReportBuilder
 from stock_research.services.report_store import ReportStore
@@ -67,3 +71,39 @@ def test_report_repository_reads_latest_and_dates_from_sqlite(tmp_path: Path) ->
     assert latest.run_status == report.run_status
     assert latest.analyses[0].recommendations[0].citation_urls
     assert repository.list_dates() == [report.report_date]
+
+
+def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Path) -> None:
+    stock = make_stock().model_copy(
+        update={"holding": Holding(quantity=Decimal("100"), cost_basis=Decimal("10"))}
+    )
+    event = EventSignal(
+        title="Confirmed adverse disclosure event",
+        occurred_at=datetime(2026, 7, 20, tzinfo=UTC),
+        direction=Direction.NEGATIVE,
+        summary="A confirmed fixture event with enough detail for multi-format parity testing.",
+        symbols=[stock.symbol],
+        is_confirmed=True,
+        citation_title="Confirmed exchange event notice",
+        citation_url="https://example.test/confirmed-event",
+    )
+    research = make_research().model_copy(update={"events": [event]})
+    report = ReportBuilder().build(make_request(research), [stock], FakeMarketData())
+
+    paths = ReportStore(tmp_path).save(report)
+
+    rendered = [
+        paths.json.read_text(encoding="utf-8"),
+        paths.markdown.read_text(encoding="utf-8"),
+        paths.html.read_text(encoding="utf-8"),
+    ]
+    expected_facts = [
+        "2026-07-21",
+        "2026-07-20",
+        "Informational return versus cost basis: +79.00%.",
+        "Confirmed exchange event notice",
+        "https://example.test/confirmed-event",
+    ]
+    for content in rendered:
+        assert all(fact in content for fact in expected_facts)
+    assert 'href="https://example.test/confirmed-event"' in rendered[2]

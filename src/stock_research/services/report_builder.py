@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 
 import pandas as pd
 
@@ -79,7 +80,25 @@ class ReportBuilder:
             evidence = self._evidence_service.validate_and_deduplicate(research.evidence)
             research = research.model_copy(update={"evidence": evidence})
             technical = calculate_technical_snapshot(bars)
-            previous_day = self._previous_day(bars, research)
+            chronology_gap = self._chronology_gap(
+                stock, technical.data_as_of, research.data_as_of, request.report_date
+            )
+            if chronology_gap is not None:
+                warnings.append(chronology_gap)
+                analyses.append(
+                    StockAnalysis(
+                        stock=stock,
+                        previous_day=self._previous_day(
+                            bars, f"No causal attribution: {chronology_gap}"
+                        ),
+                        technical=technical,
+                        research=research,
+                        recommendations=self._gap_recommendations(chronology_gap),
+                        data_gaps=[chronology_gap],
+                    )
+                )
+                continue
+            previous_day = self._previous_day(bars, research.news_summary)
             recommendations = self._recommendation_engine.recommend(
                 RecommendationInput(
                     stock=stock,
@@ -132,13 +151,21 @@ class ReportBuilder:
             combined_gap = f"{gap} Price data unavailable ({error})."
             return self._gap_analysis(stock, combined_gap, research=research)
         technical = calculate_technical_snapshot(bars)
+        chronology_gap = self._chronology_gap(
+            stock, technical.data_as_of, research.data_as_of, request.report_date
+        )
+        gaps = [gap]
+        reason = research.news_summary
+        if chronology_gap is not None:
+            gaps.append(chronology_gap)
+            reason = f"No causal attribution: {chronology_gap}"
         return StockAnalysis(
             stock=stock,
-            previous_day=self._previous_day(bars, research),
+            previous_day=self._previous_day(bars, reason),
             technical=technical,
             research=research,
             recommendations=self._gap_recommendations(gap),
-            data_gaps=[gap],
+            data_gaps=gaps,
         )
 
     @staticmethod
@@ -175,7 +202,7 @@ class ReportBuilder:
         ]
 
     @staticmethod
-    def _previous_day(bars: pd.DataFrame, research: StockResearchInput) -> PreviousDayPerformance:
+    def _previous_day(bars: pd.DataFrame, reason: str) -> PreviousDayPerformance:
         frame = bars.copy()
         frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
         for column in ("close", "volume"):
@@ -197,8 +224,27 @@ class ReportBuilder:
             volume=volume,
             previous_volume=prior_volume,
             volume_change_percent=ReportBuilder._percent_change(volume, prior_volume),
-            reason=research.news_summary,
+            reason=reason,
         )
+
+    @staticmethod
+    def _chronology_gap(
+        stock: StockConfig,
+        technical_date: date,
+        research_date: date,
+        report_date: date,
+    ) -> str | None:
+        if technical_date > report_date or research_date > report_date:
+            return (
+                f"{stock.symbol}: chronology invalid; technical date {technical_date} and "
+                f"research date {research_date} must be no later than report date {report_date}."
+            )
+        if technical_date != research_date:
+            return (
+                f"{stock.symbol}: date mismatch; technical date {technical_date} does not equal "
+                f"research date {research_date}."
+            )
+        return None
 
     @staticmethod
     def _percent_change(current: float, previous: float | None) -> float | None:

@@ -1,6 +1,8 @@
 from datetime import UTC, date, datetime
 
 import pandas as pd
+import pytest
+from pydantic import ValidationError
 
 from stock_research.domain.enums import (
     Action,
@@ -13,6 +15,8 @@ from stock_research.domain.enums import (
 from stock_research.domain.models import (
     DailyRunRequest,
     Evidence,
+    Recommendation,
+    StockAnalysis,
     StockConfig,
     StockResearchInput,
 )
@@ -73,7 +77,7 @@ def make_bars() -> pd.DataFrame:
         close = 10.0 + index * 0.1
         rows.append(
             {
-                "date": date(2026, 4, 1) + pd.Timedelta(days=index),
+                "date": date(2026, 5, 2) + pd.Timedelta(days=index),
                 "open": close - 0.05,
                 "high": close + 0.2,
                 "low": close - 0.2,
@@ -176,3 +180,47 @@ def test_zero_source_and_market_failure_labels_both_data_gaps() -> None:
     assert "zero cited sources" in gaps
     assert "fixture market outage" in gaps
     assert any("fixture market outage" in warning for warning in report.run_warnings)
+
+
+def test_stale_research_date_uses_partial_uncited_watch_without_news_attribution() -> None:
+    stock = make_stock()
+    stale = make_research().model_copy(update={"data_as_of": date(2026, 6, 18)})
+
+    report = ReportBuilder().build(make_request(stale), [stock], FakeMarketData())
+
+    analysis = report.analyses[0]
+    assert report.run_status is RunStatus.PARTIAL
+    assert any("date mismatch" in gap for gap in analysis.data_gaps)
+    assert analysis.previous_day is not None
+    assert stale.news_summary not in analysis.previous_day.reason
+    assert all(item.action is Action.WATCH for item in analysis.recommendations)
+    assert all(not item.citation_urls for item in analysis.recommendations)
+
+
+def test_stock_analysis_rejects_duplicate_recommendation_horizons() -> None:
+    report = ReportBuilder().build(make_request(make_research()), [make_stock()], FakeMarketData())
+    analysis = report.analyses[0]
+    duplicate = [
+        analysis.recommendations[0],
+        analysis.recommendations[0],
+        analysis.recommendations[2],
+    ]
+
+    with pytest.raises(ValidationError, match="exactly one recommendation"):
+        StockAnalysis.model_validate({**analysis.model_dump(), "recommendations": duplicate})
+
+
+def test_complete_stock_analysis_rejects_uncited_recommendation() -> None:
+    report = ReportBuilder().build(make_request(make_research()), [make_stock()], FakeMarketData())
+    analysis = report.analyses[0]
+    uncited: Recommendation = analysis.recommendations[0].model_copy(
+        update={"evidence_titles": [], "citation_urls": []}
+    )
+
+    with pytest.raises(ValidationError, match="valid analyses require cited recommendations"):
+        StockAnalysis.model_validate(
+            {
+                **analysis.model_dump(),
+                "recommendations": [uncited, *analysis.recommendations[1:]],
+            }
+        )

@@ -21,9 +21,11 @@ class DailyRunService:
         stock_repository: StockRepositoryProtocol,
         market_data_provider: MarketDataProvider,
         report_builder: ReportBuilder,
-        report_store: ReportStore | None = None,
-        run_repository: RunRepository | None = None,
+        report_store: ReportStore,
+        run_repository: RunRepository,
     ) -> None:
+        if report_store is None or run_repository is None:
+            raise ValueError("report_store and run_repository are required")
         self._stock_repository = stock_repository
         self._market_data_provider = market_data_provider
         self._report_builder = report_builder
@@ -42,7 +44,7 @@ class DailyRunService:
                 market_data=self._market_data_provider,
             )
             stage = "save_report"
-            paths = self._report_store.save(report) if self._report_store else None
+            paths = self._report_store.save(report)
             stage = "complete"
             self._save_run(
                 RunRecord(
@@ -51,7 +53,7 @@ class DailyRunService:
                     finished_at=datetime.now(UTC),
                     status=report.run_status,
                     stage=stage,
-                    output_paths=paths.as_dict() if paths else {},
+                    output_paths=paths.as_dict(),
                 )
             )
             return report
@@ -69,5 +71,4 @@ class DailyRunService:
             raise
 
     def _save_run(self, record: RunRecord) -> None:
-        if self._run_repository is not None:
-            self._run_repository.save(record)
+        self._run_repository.save(record)

@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -51,6 +51,7 @@ def test_daily_run_persists_failed_unhandled_exception_with_stage(tmp_path: Path
         stock_repository=FakeStockRepository([make_stock()]),
         market_data_provider=FakeMarketData(),
         report_builder=ExplodingBuilder(),
+        report_store=ReportStore(tmp_path / "reports"),
         run_repository=runs,
     )
 
@@ -80,3 +81,42 @@ def test_run_repository_round_trips_success_metadata(tmp_path: Path) -> None:
     runs.save(record)
 
     assert runs.latest() == record
+
+
+def test_daily_run_rejects_missing_persistence_dependencies(tmp_path: Path) -> None:
+    runs = RunRepository(create_engine_at(tmp_path / "runs.sqlite3"))
+
+    with pytest.raises(ValueError, match="report_store and run_repository are required"):
+        DailyRunService(
+            stock_repository=FakeStockRepository([make_stock()]),
+            market_data_provider=FakeMarketData(),
+            report_builder=ReportBuilder(),
+            report_store=None,
+            run_repository=runs,
+        )
+
+
+def test_run_repository_orders_mixed_offsets_by_utc_instant(tmp_path: Path) -> None:
+    from stock_research.domain.models import RunRecord
+
+    runs = RunRepository(create_engine_at(tmp_path / "runs.sqlite3"))
+    earlier = RunRecord(
+        report_date=date(2026, 7, 21),
+        started_at=datetime(2026, 7, 21, 10, 0, tzinfo=timezone(timedelta(hours=8))),
+        finished_at=datetime(2026, 7, 21, 10, 1, tzinfo=timezone(timedelta(hours=8))),
+        status=RunStatus.SUCCESS,
+        stage="complete",
+    )
+    later = RunRecord(
+        report_date=date(2026, 7, 21),
+        started_at=datetime(2026, 7, 21, 3, 0, tzinfo=UTC),
+        finished_at=datetime(2026, 7, 21, 3, 1, tzinfo=UTC),
+        status=RunStatus.SUCCESS,
+        stage="complete",
+    )
+
+    runs.save(earlier)
+    runs.save(later)
+
+    assert runs.latest() == later
+    assert earlier.started_at.tzinfo is UTC

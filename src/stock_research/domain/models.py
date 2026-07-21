@@ -1,5 +1,5 @@
 import re
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Literal, Self
 from uuid import uuid4
@@ -213,6 +213,20 @@ class StockAnalysis(BaseModel):
     recommendations: list[Recommendation] = Field(min_length=3, max_length=3)
     data_gaps: list[str] = Field(default_factory=list)
 
+    @model_validator(mode="after")
+    def validate_recommendations(self) -> Self:
+        counts = {
+            horizon: sum(item.horizon is horizon for item in self.recommendations)
+            for horizon in Horizon
+        }
+        if any(count != 1 for count in counts.values()):
+            raise ValueError("stock analysis requires exactly one recommendation per horizon")
+        if not self.data_gaps and any(
+            not item.evidence_titles or not item.citation_urls for item in self.recommendations
+        ):
+            raise ValueError("valid analyses require cited recommendations")
+        return self
+
 
 class DailyReport(BaseModel):
     report_date: date
@@ -238,3 +252,10 @@ class RunRecord(BaseModel):
     error_message: str | None = None
     output_paths: dict[str, str] = Field(default_factory=dict)
     report_version: str = "1"
+
+    @field_validator("started_at", "finished_at")
+    @classmethod
+    def normalize_run_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("run timestamps must include a UTC offset")
+        return value.astimezone(UTC)
