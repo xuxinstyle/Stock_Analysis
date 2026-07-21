@@ -38,6 +38,12 @@ class Confidence(StrEnum):
     HIGH = "high"
 
 
+class RunStatus(StrEnum):
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+
 class Direction(StrEnum):
     POSITIVE = "positive"
     NEUTRAL = "neutral"

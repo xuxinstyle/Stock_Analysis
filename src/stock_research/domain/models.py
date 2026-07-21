@@ -2,6 +2,7 @@ import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Self
+from uuid import uuid4
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_serializer, model_validator
 
@@ -14,6 +15,7 @@ from stock_research.domain.enums import (
     Horizon,
     Market,
     RiskLevel,
+    RunStatus,
     Trend,
 )
 
@@ -176,3 +178,63 @@ class StockResearchInput(BaseModel):
         if any(self.symbol not in item.symbols for item in self.evidence):
             raise ValueError("evidence symbols must include research symbol")
         return self
+
+
+class DailyRunRequest(BaseModel):
+    report_date: date
+    generated_at: datetime
+    research_inputs: list[StockResearchInput]
+
+
+class PreviousDayPerformance(BaseModel):
+    data_as_of: date
+    close: float = Field(ge=0)
+    previous_close: float | None = Field(default=None, ge=0)
+    change: float
+    change_percent: float | None = None
+    volume: float = Field(ge=0)
+    previous_volume: float | None = Field(default=None, ge=0)
+    volume_change_percent: float | None = None
+    reason: str = Field(min_length=1)
+
+
+class MarketStatus(BaseModel):
+    market: Market
+    data_as_of: date | None = None
+    status: Literal["available", "partial", "unavailable"]
+    message: str = Field(min_length=1)
+
+
+class StockAnalysis(BaseModel):
+    stock: StockConfig
+    previous_day: PreviousDayPerformance | None = None
+    technical: TechnicalSnapshot | None = None
+    research: StockResearchInput | None = None
+    recommendations: list[Recommendation] = Field(min_length=3, max_length=3)
+    data_gaps: list[str] = Field(default_factory=list)
+
+
+class DailyReport(BaseModel):
+    report_date: date
+    generated_at: datetime
+    run_status: RunStatus
+    market_statuses: list[MarketStatus] = Field(default_factory=list)
+    global_risks: list[str] = Field(default_factory=list)
+    run_warnings: list[str] = Field(default_factory=list)
+    analyses: list[StockAnalysis]
+    disclaimer: str = (
+        "Research-only report; not personalized investment advice, a return guarantee, "
+        "or an instruction to trade."
+    )
+
+
+class RunRecord(BaseModel):
+    run_id: str = Field(default_factory=lambda: str(uuid4()))
+    report_date: date
+    started_at: datetime
+    finished_at: datetime
+    status: RunStatus
+    stage: str = Field(min_length=1)
+    error_message: str | None = None
+    output_paths: dict[str, str] = Field(default_factory=dict)
+    report_version: str = "1"
