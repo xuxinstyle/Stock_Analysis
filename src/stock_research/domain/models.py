@@ -86,6 +86,15 @@ class EventSignal(BaseModel):
     direction: Direction
     summary: str = Field(min_length=20, max_length=1500)
     symbols: list[str] = Field(min_length=1)
+    is_confirmed: bool = False
+    citation_title: str | None = Field(default=None, min_length=4, max_length=240)
+    citation_url: HttpUrl | None = None
+
+    @model_validator(mode="after")
+    def require_citation_for_confirmed_event(self) -> Self:
+        if self.is_confirmed and (self.citation_title is None or self.citation_url is None):
+            raise ValueError("confirmed events must include a citation title and URL")
+        return self
 
 
 class Evidence(BaseModel):
@@ -125,6 +134,8 @@ class Recommendation(BaseModel):
     invalidation: str = Field(min_length=1)
     position_limit: str = Field(min_length=1)
     holding_impact: str | None = None
+    evidence_titles: list[str]
+    citation_urls: list[HttpUrl]
 
 
 class StockResearchInput(BaseModel):
