@@ -73,9 +73,11 @@ def load_daily_request(input_path: Path) -> DailyRunRequest:
 
 
 @app.command("init")
-def init() -> None:
+def init(
+    output_path: Annotated[Path | None, typer.Argument()] = None,
+) -> None:
     """Create an editable stock configuration without overwriting an existing one."""
-    destination = _configuration_path()
+    destination = output_path or _configuration_path()
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         with destination.open("x", encoding="utf-8", newline="\n") as output:

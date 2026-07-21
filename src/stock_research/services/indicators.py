@@ -20,7 +20,12 @@ def calculate_technical_snapshot(bars: pd.DataFrame) -> TechnicalSnapshot:
     frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
     for column in _REQUIRED_COLUMNS[1:]:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
-    frame = frame.dropna().sort_values("date").drop_duplicates(subset="date", keep="last")
+    frame = (
+        frame.dropna()
+        .sort_values("date")
+        .drop_duplicates(subset="date", keep="last")
+        .reset_index(drop=True)
+    )
     if frame.empty:
         raise ValueError("bars contain no complete daily records")
 

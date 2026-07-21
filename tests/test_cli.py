@@ -84,6 +84,15 @@ def test_init_does_not_overwrite_an_existing_configuration(
     assert configuration.read_text(encoding="utf-8") == "stocks: []\n"
 
 
+def test_init_accepts_an_explicit_configuration_destination(tmp_path: Path) -> None:
+    destination = tmp_path / "config" / "stocks.yaml"
+
+    result = runner.invoke(app, ["init", str(destination)])
+
+    assert result.exit_code == 0
+    assert destination.read_text(encoding="utf-8").startswith("stocks:\n")
+
+
 def test_import_config_replaces_the_stock_set_atomically(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

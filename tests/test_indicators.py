@@ -39,3 +39,13 @@ def test_technical_snapshot_exposes_unrounded_calculations() -> None:
     expected_sma_20 = sum(bars["close"].tail(20)) / 20
     assert snapshot.sma_20 == pytest.approx(expected_sma_20)
     assert snapshot.sma_20 != round(expected_sma_20, 2)
+
+
+def test_technical_snapshot_uses_latest_row_when_index_labels_are_duplicated() -> None:
+    bars = make_bars(closes=[10 + index * 0.2 for index in range(40)])
+    bars.index = [0] * len(bars)
+
+    snapshot = calculate_technical_snapshot(bars)
+
+    assert snapshot.data_as_of == date(2026, 7, 20)
+    assert snapshot.latest_close == pytest.approx(17.8)
