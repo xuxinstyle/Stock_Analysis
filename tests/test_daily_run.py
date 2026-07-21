@@ -21,6 +21,12 @@ from test_report_builder import FakeMarketData, make_request, make_research, mak
 PROJECT_ROOT = Path(__file__).parent.parent
 TEST_DATA_DIR = Path(__file__).parent / "fixtures"
 DAILY_RESEARCH_PROMPT = PROJECT_ROOT / "docs" / "automation" / "daily-research-prompt.md"
+README = PROJECT_ROOT / "README.md"
+ACTIVE_STOCK_COMMAND = (
+    "python -c 'from stock_research.cli import build_services; import json; "
+    "print(json.dumps([dict(symbol=stock.symbol, name=stock.name, market=stock.market.value) "
+    "for stock in build_services().configuration.list_stocks()], ensure_ascii=False))'"
+)
 runner = CliRunner()
 
 
@@ -64,6 +70,14 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
 
     for instruction in required_instructions:
         assert instruction in prompt
+
+    readme = README.read_text(encoding="utf-8")
+    assert "SQLite-backed persisted active repository" in readme
+    assert "YAML is only an import input" in readme
+    assert ACTIVE_STOCK_COMMAND in prompt
+    assert ACTIVE_STOCK_COMMAND in readme
+    assert "$env:STOCK_RESEARCH_HOME/config/stocks.yaml" not in readme
+    assert ".stock-research/config/stocks.yaml" not in readme
 
 
 def test_fixture_payload_can_be_validated_then_generated_by_cli(

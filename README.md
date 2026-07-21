@@ -39,7 +39,7 @@ data is stored in `.stock-research` below the current directory. Set
 
 ```powershell
 stock-research init
-stock-research import-config .\.stock-research\config\stocks.yaml
+stock-research import-config .\config\stocks.example.yaml
 stock-research validate-input .\tests\fixtures\daily_research_request.json
 stock-research generate --input .\tests\fixtures\daily_research_request.json
 stock-research reports
@@ -55,13 +55,24 @@ instructs Codex to research the active A-share and Hong Kong configuration, save
 research-only: it must label data gaps or conflicting claims and must never trade, connect to a
 broker, invent citations, or promise returns.
 
-Before using that prompt, initialize and import the intended persisted configuration. The prompt
-uses `$env:STOCK_RESEARCH_HOME/config/stocks.yaml` when set, otherwise
-`.stock-research/config/stocks.yaml`:
+Before using that prompt, initialize and import the intended configuration. YAML is only an
+import input; after import, the daily automation reads the SQLite-backed persisted active
+repository from the same app home used by report generation:
+
+The daily active source is the SQLite-backed persisted active repository.
+YAML is only an import input, never the daily active source.
 
 ```powershell
 stock-research init
 stock-research import-config .\config\stocks.example.yaml
+```
+
+Use this read-only command to show the active daily symbols, names, and markets. It is the same
+service invocation documented in the automation prompt and reads the repository used by
+`DailyRunService`:
+
+```powershell
+python -c 'from stock_research.cli import build_services; import json; print(json.dumps([dict(symbol=stock.symbol, name=stock.name, market=stock.market.value) for stock in build_services().configuration.list_stocks()], ensure_ascii=False))'
 ```
 
 After the automation has written its JSON input, the same local handoff can be checked manually:
