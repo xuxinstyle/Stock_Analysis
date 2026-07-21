@@ -3,16 +3,66 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from typer.testing import CliRunner
 
+from stock_research.cli import app
 from stock_research.db import create_engine_at
 from stock_research.domain.enums import RunStatus
 from stock_research.domain.models import StockConfig
 from stock_research.repositories.runs import RunRepository
 from stock_research.services.daily_run import DailyRunService
+from stock_research.services.market_data import MarketDataUnavailable
 from stock_research.services.report_builder import ReportBuilder
 from stock_research.services.report_store import ReportStore
 
 from test_report_builder import FakeMarketData, make_request, make_research, make_stock
+
+
+PROJECT_ROOT = Path(__file__).parent.parent
+TEST_DATA_DIR = Path(__file__).parent / "fixtures"
+DAILY_RESEARCH_PROMPT = PROJECT_ROOT / "docs" / "automation" / "daily-research-prompt.md"
+runner = CliRunner()
+
+
+class OfflineMarketDataProvider:
+    def fetch_daily_bars(self, stock, end, days: int = 260):
+        raise MarketDataUnavailable(stock.symbol, "offline fixture has no market data")
+
+
+def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
+    assert DAILY_RESEARCH_PROMPT.exists()
+
+    prompt = DAILY_RESEARCH_PROMPT.read_text(encoding="utf-8")
+    required_instructions = (
+        "stock-research validate-input",
+        "stock-research generate --input",
+        "Never place orders, connect to brokers, or execute trades.",
+        "Never assert return certainty or write an uncited material claim.",
+        "Record data gaps rather than inventing information.",
+        "trigger, observation/target, invalidation, position limit, risk, and confidence",
+    )
+
+    for instruction in required_instructions:
+        assert instruction in prompt
+
+
+def test_fixture_payload_can_be_validated_then_generated_by_cli(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    monkeypatch.setattr("stock_research.cli.AkShareMarketDataProvider", OfflineMarketDataProvider)
+    request_path = TEST_DATA_DIR / "daily_research_request.json"
+
+    assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
+    assert runner.invoke(app, ["validate-input", str(request_path)]).exit_code == 0
+    result = runner.invoke(app, ["generate", "--input", str(request_path)])
+
+    assert result.exit_code == 0
+    report = ReportStore(tmp_path / "reports").load_latest()
+    assert report is not None
+    assert report.analyses[0].research is not None
+    assert report.analyses[0].research.evidence[0].url
+    assert report.analyses[0].recommendations[0].invalidation
 
 
 class FakeStockRepository:

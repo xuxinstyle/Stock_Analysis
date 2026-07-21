@@ -45,3 +45,28 @@ stock-research generate --input .\tests\fixtures\daily_research_request.json
 stock-research reports
 stock-research serve --port 8000
 ```
+
+## Daily Codex research handoff
+
+The local Codex App automation prompt is documented in
+[`docs/automation/daily-research-prompt.md`](docs/automation/daily-research-prompt.md). It
+instructs Codex to research the active A-share and Hong Kong configuration, save one cited
+`DailyRunRequest` JSON file, validate it, and generate a local research report. The workflow is
+research-only: it must label data gaps or conflicting claims and must never trade, connect to a
+broker, invent citations, or promise returns.
+
+Before using that prompt, initialize and import the intended persisted configuration. The prompt
+uses `$env:STOCK_RESEARCH_HOME/config/stocks.yaml` when set, otherwise
+`.stock-research/config/stocks.yaml`:
+
+```powershell
+stock-research init
+stock-research import-config .\config\stocks.example.yaml
+```
+
+After the automation has written its JSON input, the same local handoff can be checked manually:
+
+```powershell
+stock-research validate-input .\.stock-research\input\daily-research-request-YYYY-MM-DD.json
+stock-research generate --input .\.stock-research\input\daily-research-request-YYYY-MM-DD.json
+```
