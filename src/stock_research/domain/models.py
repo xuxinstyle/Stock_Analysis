@@ -3,9 +3,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Self
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_serializer, model_validator
 
-from stock_research.domain.enums import Credibility, Direction, EvidenceCategory, Market
+from stock_research.domain.enums import Credibility, Direction, EvidenceCategory, Market, Trend
 
 
 class Holding(BaseModel):
@@ -31,6 +31,43 @@ class StockConfig(BaseModel):
         if not re.fullmatch(patterns[self.market], self.symbol):
             raise ValueError("symbol must use SH.600000, SZ.000001, or HK.00700 format")
         return self
+
+
+class DailyBar(BaseModel):
+    date: date
+    open: float = Field(ge=0)
+    high: float = Field(ge=0)
+    low: float = Field(ge=0)
+    close: float = Field(ge=0)
+    volume: float = Field(ge=0)
+
+
+class TechnicalSnapshot(BaseModel):
+    data_as_of: date
+    latest_close: float
+    sma_5: float | None = None
+    sma_20: float | None = None
+    sma_60: float | None = None
+    rsi_14: float | None = None
+    macd: float | None = None
+    macd_signal: float | None = None
+    macd_histogram: float | None = None
+    bollinger_lower: float | None = None
+    bollinger_middle: float | None = None
+    bollinger_upper: float | None = None
+    volume_ratio_20: float | None = None
+    support_20: float | None = None
+    resistance_20: float | None = None
+    realized_volatility_20: float | None = None
+    trend: Trend
+
+    @model_serializer(mode="wrap")
+    def serialize_with_rounded_metrics(self, handler: object) -> dict[str, object]:
+        data = handler(self)
+        return {
+            key: round(value, 4) if isinstance(value, float) else value
+            for key, value in data.items()
+        }
 
 
 class EventSignal(BaseModel):

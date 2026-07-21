@@ -6,6 +6,12 @@ class Market(StrEnum):
     HONG_KONG = "hong_kong"
 
 
+class Trend(StrEnum):
+    UP = "up"
+    DOWN = "down"
+    NEUTRAL = "neutral"
+
+
 class Horizon(StrEnum):
     SHORT = "short"
     MEDIUM = "medium"
