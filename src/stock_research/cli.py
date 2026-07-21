@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 from typing import Annotated
 
 import typer
+import yaml
 from pydantic import ValidationError
 
 from stock_research.db import create_engine_at
@@ -58,8 +60,8 @@ def _configuration_path(home: Path | None = None) -> Path:
     return (home or app_home()) / "config" / "stocks.yaml"
 
 
-def _example_configuration_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "config" / "stocks.example.yaml"
+def _example_configuration_text() -> str:
+    return files("stock_research").joinpath("resources/stocks.example.yaml").read_text(encoding="utf-8")
 
 
 def load_daily_request(input_path: Path) -> DailyRunRequest:
@@ -77,7 +79,7 @@ def init() -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         with destination.open("x", encoding="utf-8", newline="\n") as output:
-            output.write(_example_configuration_path().read_text(encoding="utf-8"))
+            output.write(_example_configuration_text())
     except FileExistsError:
         typer.echo(f"configuration already exists: {destination}", err=True)
         raise typer.Exit(code=1)
@@ -91,7 +93,7 @@ def import_config(
     """Validate and atomically replace the configured stock set from YAML."""
     try:
         stocks = build_services().configuration.replace_from_yaml(input_path)
-    except (OSError, ValidationError, ValueError) as error:
+    except (OSError, ValidationError, ValueError, yaml.YAMLError) as error:
         typer.echo(f"configuration import failed: {error}", err=True)
         raise typer.Exit(code=1)
     typer.echo(f"imported {len(stocks)} stock configuration(s)")
@@ -115,7 +117,7 @@ def generate(
         request = load_daily_request(input_path)
         services = build_services()
         report = services.daily_run.run(request)
-        paths = services.report_store.save(report)
+        paths = services.report_store.paths_for(report.report_date)
     except (OSError, ValidationError, ValueError, RuntimeError) as error:
         typer.echo(f"report generation failed: {error}", err=True)
         raise typer.Exit(code=1)

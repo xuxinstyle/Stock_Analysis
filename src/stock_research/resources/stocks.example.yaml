@@ -1,0 +1,16 @@
+stocks:
+  - symbol: SH.600000
+    name: 浦发银行
+    market: a_share
+    industry: 银行
+    holding:
+      quantity: "100"
+      cost_basis: "10.50"
+      cash_available: "50.00"
+      risk_profile: balanced
+  - symbol: SZ.000001
+    name: 平安银行
+    market: a_share
+  - symbol: HK.00700
+    name: 腾讯控股
+    market: hong_kong

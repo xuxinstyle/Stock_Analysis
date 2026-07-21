@@ -49,13 +49,8 @@ class ReportStore:
         )
 
     def save(self, report: DailyReport) -> ReportPaths:
-        destination = self.root / report.report_date.isoformat()
-        destination.mkdir(parents=True, exist_ok=True)
-        paths = ReportPaths(
-            json=destination / "report.json",
-            markdown=destination / "report.md",
-            html=destination / "report.html",
-        )
+        paths = self.paths_for(report.report_date)
+        paths.json.parent.mkdir(parents=True, exist_ok=True)
         payloads = {
             paths.json: json.dumps(report.model_dump(mode="json"), ensure_ascii=False, indent=2),
             paths.markdown: self._render_markdown(report),
@@ -65,6 +60,14 @@ class ReportStore:
             self._atomic_write(path, content)
         self.repository.save(report)
         return paths
+
+    def paths_for(self, report_date: date) -> ReportPaths:
+        destination = self.root / report_date.isoformat()
+        return ReportPaths(
+            json=destination / "report.json",
+            markdown=destination / "report.md",
+            html=destination / "report.html",
+        )
 
     def load_latest(self) -> DailyReport | None:
         return self.repository.latest()
