@@ -66,6 +66,13 @@ class StockResearchInput(BaseModel):
     events: list[EventSignal]
     evidence: list[Evidence]
 
+    @field_validator("symbol")
+    @classmethod
+    def validate_subject_symbol(cls, value: str) -> str:
+        if not re.fullmatch(r"(?:(?:SH|SZ)\.\d{6}|HK\.\d{5})", value):
+            raise ValueError("symbol must use SH.600000, SZ.000001, or HK.00700 format")
+        return value
+
     @field_validator(
         "fundamental_summary",
         "industry_summary",

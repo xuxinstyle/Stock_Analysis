@@ -92,6 +92,16 @@ def test_research_input_rejects_evidence_for_another_stock() -> None:
         StockResearchInput.model_validate(payload)
 
 
+def test_research_input_rejects_us_subject_symbol() -> None:
+    payload = valid_research_payload(symbol="US.AAPL")
+    payload["evidence"] = [
+        {**item, "symbols": ["US.AAPL"]} for item in payload["evidence"]  # type: ignore[misc]
+    ]
+
+    with pytest.raises(ValidationError, match=r"symbol must use SH\.600000"):
+        StockResearchInput.model_validate(payload)
+
+
 @pytest.mark.parametrize(
     "summary_name",
     [
