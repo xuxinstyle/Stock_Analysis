@@ -96,4 +96,11 @@ def test_hk_fetch_dispatches_to_hk_client_and_normalizes_rows() -> None:
         "close": 1.5,
         "volume": 10,
     }
-    assert bars.iloc[-1]["date"] == date(2026, 7, 20)
+    assert bars.iloc[-1].to_dict() == {
+        "date": date(2026, 7, 20),
+        "open": 31,
+        "high": 32,
+        "low": 30,
+        "close": 31.5,
+        "volume": 310,
+    }

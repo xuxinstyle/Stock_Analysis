@@ -118,12 +118,27 @@ unverified claims. A `partial` report must not be read as complete coverage.
   mismatch. Do not invent evidence or bypass validation.
 - If a run is `partial`, keep the valid output, then investigate every warning and per-stock data
   gap. Retry only after the missing source or completed market data is available.
-- If generation fails, inspect the CLI error and the local run record, correct the input,
-  configuration, filesystem, or data-access issue, and rerun the same validated request.
+- If generation fails, inspect the CLI error and the local run record. Run records are stored at
+  `<app-home>/data/runs.sqlite3`, where `<app-home>` is the resolved `STOCK_RESEARCH_HOME` or the
+  default `.stock-research` directory.
+  `stock-research reports` lists generated reports, not failed run attempts.
+  This copyable command opens the configured run database read-only and prints the 10 most recent
+  report dates, statuses, stages, errors, and timestamps:
+
+  ```powershell
+  python -c "import os, sqlite3; from pathlib import Path; home=Path(os.environ.get('STOCK_RESEARCH_HOME', '.stock-research')).expanduser().resolve(); database=home/'data'/'runs.sqlite3'; connection=sqlite3.connect(f'file:{database.as_posix()}?mode=ro', uri=True); rows=connection.execute('SELECT report_date, status, stage, error_message, started_at, finished_at FROM runs ORDER BY started_at DESC LIMIT 10').fetchall(); print('\n'.join(' | '.join('' if value is None else str(value) for value in row) for row in rows) or 'no run records'); connection.close()"
+  ```
+
+  Use the reported stage and error to correct the input, configuration, filesystem, or data-access
+  issue, then rerun the same validated request.
 - If the dashboard port is occupied, choose another local port, for example
   `stock-research serve --port 8001`.
 
 ## Development validation
+
+The repeatable integration coverage checks partial-report parity across JSON, Markdown, and HTML,
+plus fake-client Hong Kong endpoint dispatch and normalized first/latest OHLCV rows without network
+access.
 
 ```powershell
 python -m pytest -v

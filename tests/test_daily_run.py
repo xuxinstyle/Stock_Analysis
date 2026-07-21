@@ -80,6 +80,18 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
     assert ".stock-research/config/stocks.yaml" not in readme
 
 
+def test_readme_documents_read_only_failed_run_inspection() -> None:
+    readme = README.read_text(encoding="utf-8")
+
+    assert "<app-home>/data/runs.sqlite3" in readme
+    assert "mode=ro" in readme
+    assert (
+        "SELECT report_date, status, stage, error_message, started_at, finished_at "
+        "FROM runs ORDER BY started_at DESC LIMIT 10"
+    ) in readme
+    assert "`stock-research reports` lists generated reports, not failed run attempts" in readme
+
+
 def test_fixture_payload_can_be_validated_then_generated_by_cli(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -90,7 +102,9 @@ def test_fixture_payload_can_be_validated_then_generated_by_cli(
     assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
     assert runner.invoke(app, ["validate-input", str(request_path)]).exit_code == 0
     configured_symbols = {stock.symbol for stock in build_services().configuration.list_stocks()}
-    input_symbols = {research.symbol for research in load_daily_request(request_path).research_inputs}
+    input_symbols = {
+        research.symbol for research in load_daily_request(request_path).research_inputs
+    }
     assert input_symbols == configured_symbols
 
     result = runner.invoke(app, ["generate", "--input", str(request_path)])
@@ -108,7 +122,9 @@ def test_fixture_payload_can_be_validated_then_generated_by_cli(
         for evidence in analysis.research.evidence
     )
     assert all(analysis.recommendations[0].invalidation for analysis in report.analyses)
-    assert not any("expected exactly one research input" in warning for warning in report.run_warnings)
+    assert not any(
+        "expected exactly one research input" in warning for warning in report.run_warnings
+    )
 
 
 class FakeStockRepository:
