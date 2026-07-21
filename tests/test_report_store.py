@@ -75,7 +75,14 @@ def test_report_repository_reads_latest_and_dates_from_sqlite(tmp_path: Path) ->
 
 def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Path) -> None:
     stock = make_stock().model_copy(
-        update={"holding": Holding(quantity=Decimal("100"), cost_basis=Decimal("10"))}
+        update={
+            "holding": Holding(
+                quantity=Decimal("100"),
+                cost_basis=Decimal("10"),
+                cash_available=Decimal("2500"),
+                risk_profile="balanced",
+            )
+        }
     )
     event = EventSignal(
         title="Confirmed adverse disclosure event",
@@ -110,6 +117,9 @@ def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Pat
 
     analysis = report.analyses[0]
     structured_models = [
+        analysis.stock,
+        analysis.stock.holding,
+        *analysis.research.events,
         analysis.previous_day,
         analysis.technical,
         *analysis.research.evidence,

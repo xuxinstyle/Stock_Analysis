@@ -331,3 +331,36 @@ def test_recommendation_citation_pairs_reject_blank_values(
                 "recommendations": [blank, *analysis.recommendations[1:]],
             }
         )
+
+
+@pytest.mark.parametrize("blank_gap", ["", "   ", "\t"])
+def test_stock_analysis_rejects_blank_data_gap(blank_gap: str) -> None:
+    stale = make_research().model_copy(update={"data_as_of": date(2026, 7, 17)})
+    analysis = (
+        ReportBuilder()
+        .build(make_request(stale), [make_stock()], FakeMarketData(bars_end=date(2026, 7, 17)))
+        .analyses[0]
+    )
+
+    with pytest.raises(ValidationError, match="data gaps must not be blank"):
+        StockAnalysis.model_validate({**analysis.model_dump(), "data_gaps": [blank_gap]})
+
+
+def test_uncited_fallback_rationale_must_match_an_actual_data_gap() -> None:
+    stale = make_research().model_copy(update={"data_as_of": date(2026, 7, 17)})
+    analysis = (
+        ReportBuilder()
+        .build(make_request(stale), [make_stock()], FakeMarketData(bars_end=date(2026, 7, 17)))
+        .analyses[0]
+    )
+    invented = analysis.recommendations[0].model_copy(
+        update={"rationale": ["Data-gap fallback: invented but unlisted gap"]}
+    )
+
+    with pytest.raises(ValidationError, match="match an actual listed data gap"):
+        StockAnalysis.model_validate(
+            {
+                **analysis.model_dump(),
+                "recommendations": [invented, *analysis.recommendations[1:]],
+            }
+        )

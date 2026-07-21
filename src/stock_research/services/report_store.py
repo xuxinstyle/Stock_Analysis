@@ -132,6 +132,18 @@ class ReportStore:
         lines = [
             "",
             f"# {analysis.stock.symbol} {analysis.stock.name}",
+            "",
+            "## 股票配置",
+            *ReportStore._markdown_structured_fields(analysis.stock),
+            *(
+                [
+                    "",
+                    "### 持仓配置",
+                    *ReportStore._markdown_structured_fields(analysis.stock.holding),
+                ]
+                if analysis.stock.holding
+                else []
+            ),
             (
                 f"- 研究数据截至：{research.data_as_of.isoformat()}"
                 if research
@@ -183,6 +195,9 @@ class ReportStore:
                 lines.append(f"- {event.occurred_at.isoformat()} — {event.title}: {event.summary}")
                 if event.citation_title and event.citation_url:
                     lines.append(f"  - 事件来源：[{event.citation_title}]({event.citation_url})")
+                lines.extend(
+                    f"  - {name}: {value}" for name, value in ReportStore._structured_fields(event)
+                )
         else:
             lines.append("- 无已提供的可验证突发事件。")
         for horizon, heading in (
@@ -253,5 +268,7 @@ class ReportStore:
         if isinstance(value, list):
             return ", ".join(ReportStore._display_value(item) for item in value)
         if isinstance(value, dict):
-            return json.dumps(value, ensure_ascii=False, sort_keys=True)
+            return ", ".join(
+                f"{key}={ReportStore._display_value(item)}" for key, item in sorted(value.items())
+            )
         return str(value)

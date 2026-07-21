@@ -213,6 +213,13 @@ class StockAnalysis(BaseModel):
     recommendations: list[Recommendation] = Field(min_length=3, max_length=3)
     data_gaps: list[str] = Field(default_factory=list)
 
+    @field_validator("data_gaps")
+    @classmethod
+    def require_nonblank_data_gaps(cls, value: list[str]) -> list[str]:
+        if any(not gap.strip() for gap in value):
+            raise ValueError("data gaps must not be blank")
+        return value
+
     @model_validator(mode="after")
     def validate_recommendations(self) -> Self:
         counts = {
@@ -243,8 +250,12 @@ class StockAnalysis(BaseModel):
                 raise ValueError(
                     "uncited data-gap recommendations must be WATCH with LOW confidence and HIGH risk"
                 )
-            if not any("data-gap" in reason.casefold() for reason in recommendation.rationale):
-                raise ValueError("uncited fallbacks require explicit data-gap rationale")
+            canonical_rationales = {f"Data-gap fallback: {gap}" for gap in self.data_gaps}
+            if not any(reason in canonical_rationales for reason in recommendation.rationale):
+                raise ValueError(
+                    "uncited fallbacks require explicit data-gap rationale that must match "
+                    "an actual listed data gap"
+                )
         return self
 
 

@@ -33,6 +33,9 @@
   {% for analysis in report.analyses %}
   <article>
     <h1>{{ analysis.stock.symbol }} {{ analysis.stock.name }}</h1>
+    <h2>股票配置</h2>
+    <dl>{% for name, value in structured_fields(analysis.stock) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
+    {% if analysis.stock.holding %}<h3>持仓配置</h3><dl>{% for name, value in structured_fields(analysis.stock.holding) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
     <p>研究数据截至：{{ analysis.research.data_as_of if analysis.research else "不可用" }}</p>
     <h2>前日表现与原因</h2>
     {% if analysis.previous_day %}
@@ -48,7 +51,7 @@
     <h2>消息面分析</h2>
     {% if analysis.research %}<p>{{ analysis.research.news_summary }}</p><p>国际传导：{{ analysis.research.international_summary }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}
     <h2>突发事件</h2>
-    <ul>{% if analysis.research %}{% for event in analysis.research.events %}<li>{{ event.occurred_at.isoformat() }} — {{ event.title }}: {{ event.summary }}{% if event.citation_title and event.citation_url %}；事件来源：<a href="{{ event.citation_url }}">{{ event.citation_title }}</a>{% endif %}</li>{% else %}<li>无已提供的可验证突发事件。</li>{% endfor %}{% else %}<li>无已提供的可验证突发事件。</li>{% endif %}</ul>
+    <ul>{% if analysis.research %}{% for event in analysis.research.events %}<li>{{ event.occurred_at.isoformat() }} — {{ event.title }}: {{ event.summary }}{% if event.citation_title and event.citation_url %}；事件来源：<a href="{{ event.citation_url }}">{{ event.citation_title }}</a>{% endif %}<dl>{% for name, value in structured_fields(event) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>无已提供的可验证突发事件。</li>{% endfor %}{% else %}<li>无已提供的可验证突发事件。</li>{% endif %}</ul>
     {% for horizon, heading in [("short", "短线建议"), ("medium", "中线建议"), ("long", "长线建议")] %}
       {% set recommendation = recommendation_for(analysis, horizon) %}
       <h2>{{ heading }}</h2>
