@@ -59,18 +59,12 @@ def test_yaml_replacement_removes_stale_stocks_and_keeps_prior_set_on_invalid_in
     service.import_yaml(TEST_DATA_DIR / "stocks.yaml")
     replacement = tmp_path / "replacement.yaml"
     replacement.write_text(
-        "stocks:\n"
-        "  - symbol: HK.00700\n"
-        "    name: Tencent\n"
-        "    market: hong_kong\n",
+        "stocks:\n  - symbol: HK.00700\n    name: Tencent\n    market: hong_kong\n",
         encoding="utf-8",
     )
     invalid = tmp_path / "invalid.yaml"
     invalid.write_text(
-        "stocks:\n"
-        "  - symbol: invalid\n"
-        "    name: Broken\n"
-        "    market: hong_kong\n",
+        "stocks:\n  - symbol: invalid\n    name: Broken\n    market: hong_kong\n",
         encoding="utf-8",
     )
 

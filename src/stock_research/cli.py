@@ -61,7 +61,11 @@ def _configuration_path(home: Path | None = None) -> Path:
 
 
 def _example_configuration_text() -> str:
-    return files("stock_research").joinpath("resources/stocks.example.yaml").read_text(encoding="utf-8")
+    return (
+        files("stock_research")
+        .joinpath("resources/stocks.example.yaml")
+        .read_text(encoding="utf-8")
+    )
 
 
 def load_daily_request(input_path: Path) -> DailyRunRequest:
@@ -107,7 +111,9 @@ def validate_input(
 ) -> None:
     """Validate a DailyRunRequest JSON document without running a report."""
     request = load_daily_request(input_path)
-    typer.echo(f"\u6bcf\u65e5\u7814\u7a76\u8bf7\u6c42\u6709\u6548: {request.report_date.isoformat()}")
+    typer.echo(
+        f"\u6bcf\u65e5\u7814\u7a76\u8bf7\u6c42\u6709\u6548: {request.report_date.isoformat()}"
+    )
 
 
 @app.command("generate")

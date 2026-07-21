@@ -42,7 +42,9 @@ class RecommendationEngine:
             for horizon in _HORIZONS
         ]
 
-    def _decision(self, analysis_input: RecommendationInput) -> tuple[dict[str, object], Confidence]:
+    def _decision(
+        self, analysis_input: RecommendationInput
+    ) -> tuple[dict[str, object], Confidence]:
         technical = analysis_input.technical
         decision_evidence = self._decision_grade_evidence(analysis_input.evidence)
         safety_reason = self._safety_reason(
@@ -59,10 +61,14 @@ class RecommendationEngine:
 
         support = technical.support_20
         if support is not None and technical.latest_close < support:
-            return self._support_downside_decision(analysis_input, decision_evidence), Confidence.MEDIUM
+            return self._support_downside_decision(
+                analysis_input, decision_evidence
+            ), Confidence.MEDIUM
 
         positive_evidence = self._positive_support(decision_evidence)
-        if self._is_confirmed_bullish(technical.trend, technical.rsi_14, decision_evidence, positive_evidence):
+        if self._is_confirmed_bullish(
+            technical.trend, technical.rsi_14, decision_evidence, positive_evidence
+        ):
             return self._bullish_decision(analysis_input, positive_evidence), Confidence.HIGH
 
         return self._neutral_watch_decision(analysis_input, decision_evidence), Confidence.MEDIUM
@@ -86,7 +92,9 @@ class RecommendationEngine:
             return "20-day realized volatility is high or unavailable"
         if len(decision_evidence) < 2:
             return "fewer than two non-low-credibility local sources are available"
-        directions = {item.direction for item in decision_evidence if item.direction is not Direction.NEUTRAL}
+        directions = {
+            item.direction for item in decision_evidence if item.direction is not Direction.NEUTRAL
+        }
         if Direction.POSITIVE in directions and Direction.NEGATIVE in directions:
             return "non-low-credibility local sources have conflicting directions"
         return None
@@ -120,9 +128,7 @@ class RecommendationEngine:
         if trend is not Trend.UP or rsi_14 is None or rsi_14 >= 70:
             return False
 
-        negative_count = sum(
-            item.direction is Direction.NEGATIVE for item in decision_evidence
-        )
+        negative_count = sum(item.direction is Direction.NEGATIVE for item in decision_evidence)
         has_primary = any(item.credibility is Credibility.PRIMARY for item in positive_evidence)
         secondary_sources = {
             item.source_name
@@ -262,7 +268,9 @@ class RecommendationEngine:
             else self._named_condition(evidence)
         )
 
-    def _resistance_text(self, analysis_input: RecommendationInput, evidence: list[Evidence]) -> str:
+    def _resistance_text(
+        self, analysis_input: RecommendationInput, evidence: list[Evidence]
+    ) -> str:
         resistance = analysis_input.technical.resistance_20
         return (
             f"named 20-day resistance {resistance:.2f}"

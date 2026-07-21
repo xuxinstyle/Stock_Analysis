@@ -13,7 +13,9 @@ runner = CliRunner()
 
 
 def test_validate_input_prints_the_research_date() -> None:
-    result = runner.invoke(app, ["validate-input", str(TEST_DATA_DIR / "daily_research_request.json")])
+    result = runner.invoke(
+        app, ["validate-input", str(TEST_DATA_DIR / "daily_research_request.json")]
+    )
 
     assert result.exit_code == 0
     assert "\u6bcf\u65e5\u7814\u7a76\u8bf7\u6c42\u6709\u6548" in result.stdout
@@ -47,9 +49,7 @@ def test_generate_writes_three_formats_without_network_requests(
     assert (tmp_path / "reports" / "2026-07-21" / "report.html").exists()
 
 
-def test_generate_persists_the_report_once(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_generate_persists_the_report_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
     original_save = ReportStore.save
     saves = 0
@@ -99,10 +99,7 @@ def test_import_config_replaces_the_stock_set_atomically(
     monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
     replacement = tmp_path / "replacement.yaml"
     replacement.write_text(
-        "stocks:\n"
-        "  - symbol: HK.00700\n"
-        "    name: Tencent\n"
-        "    market: hong_kong\n",
+        "stocks:\n  - symbol: HK.00700\n    name: Tencent\n    market: hong_kong\n",
         encoding="utf-8",
     )
 
@@ -146,9 +143,12 @@ def test_reports_prints_the_recorded_status_for_each_date(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
-    assert runner.invoke(
-        app, ["generate", "--input", str(TEST_DATA_DIR / "daily_research_request.json")]
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app, ["generate", "--input", str(TEST_DATA_DIR / "daily_research_request.json")]
+        ).exit_code
+        == 0
+    )
 
     result = runner.invoke(app, ["reports"])
 

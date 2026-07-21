@@ -16,9 +16,7 @@ class MarketDataUnavailable(RuntimeError):
 
 
 class MarketDataProvider(Protocol):
-    def fetch_daily_bars(
-        self, stock: StockConfig, end: date, days: int = 260
-    ) -> pd.DataFrame: ...
+    def fetch_daily_bars(self, stock: StockConfig, end: date, days: int = 260) -> pd.DataFrame: ...
 
 
 class AkShareMarketDataProvider:
@@ -39,16 +37,16 @@ class AkShareMarketDataProvider:
         exchange, code = symbol.split(".", maxsplit=1)
         return code, {"SH": "sh", "SZ": "sz", "HK": "hk"}[exchange]
 
-    def fetch_daily_bars(
-        self, stock: StockConfig, end: date, days: int = 260
-    ) -> pd.DataFrame:
+    def fetch_daily_bars(self, stock: StockConfig, end: date, days: int = 260) -> pd.DataFrame:
         if days <= 0:
             raise ValueError("days must be positive")
 
         raw = self._fetch_raw(stock, end=end, days=days)
         bars = self._normalise(raw, end=end).tail(days).reset_index(drop=True)
         if len(bars) < 30:
-            raise MarketDataUnavailable(stock.symbol, "fewer than 30 completed daily bars are available")
+            raise MarketDataUnavailable(
+                stock.symbol, "fewer than 30 completed daily bars are available"
+            )
         return bars
 
     def _fetch_raw(self, stock: StockConfig, end: date, days: int) -> pd.DataFrame:

@@ -43,7 +43,9 @@ def confirmed_bullish_input(*, holding: Holding | None = None) -> Recommendation
             trend=Trend.UP,
         ),
         evidence=[
-            evidence("Exchange filing supports earnings outlook", Direction.POSITIVE, Credibility.PRIMARY),
+            evidence(
+                "Exchange filing supports earnings outlook", Direction.POSITIVE, Credibility.PRIMARY
+            ),
             evidence("Industry demand improves", Direction.POSITIVE, Credibility.SECONDARY),
         ],
         events=[],
@@ -86,8 +88,15 @@ def evidence(
 def test_positive_confirmed_input_returns_three_horizon_recommendations() -> None:
     recommendations = RecommendationEngine().recommend(confirmed_bullish_input())
 
-    assert [item.horizon for item in recommendations] == [Horizon.SHORT, Horizon.MEDIUM, Horizon.LONG]
-    assert all(item.action in {Action.WATCH, Action.BUY_IN_TRANCHES, Action.HOLD} for item in recommendations)
+    assert [item.horizon for item in recommendations] == [
+        Horizon.SHORT,
+        Horizon.MEDIUM,
+        Horizon.LONG,
+    ]
+    assert all(
+        item.action in {Action.WATCH, Action.BUY_IN_TRANCHES, Action.HOLD}
+        for item in recommendations
+    )
     assert all(
         item.trigger and item.invalidation and item.rationale and item.position_limit
         for item in recommendations
@@ -113,7 +122,10 @@ def test_holding_return_is_informational_and_uses_latest_close() -> None:
         confirmed_bullish_input(holding=Holding(quantity=Decimal("100"), cost_basis=Decimal("10")))
     )
 
-    assert all(item.holding_impact == "Informational return versus cost basis: +20.00%." for item in recommendations)
+    assert all(
+        item.holding_impact == "Informational return versus cost basis: +20.00%."
+        for item in recommendations
+    )
 
 
 def test_normal_confidence_uses_horizon_specific_position_limits() -> None:
@@ -336,12 +348,18 @@ def test_confirmed_negative_event_recommends_reduce_or_avoid() -> None:
 def test_recommendations_include_decisive_evidence_titles_and_urls() -> None:
     recommendations = RecommendationEngine().recommend(confirmed_bullish_input())
 
-    assert all("Exchange filing supports earnings outlook" in item.evidence_titles for item in recommendations)
     assert all(
-        str(item.citation_urls[0]) == "https://example.com/exchange-filing-supports-earnings-outlook"
+        "Exchange filing supports earnings outlook" in item.evidence_titles
         for item in recommendations
     )
-    assert all("Exchange filing supports earnings outlook" in item.trigger for item in recommendations)
+    assert all(
+        str(item.citation_urls[0])
+        == "https://example.com/exchange-filing-supports-earnings-outlook"
+        for item in recommendations
+    )
+    assert all(
+        "Exchange filing supports earnings outlook" in item.trigger for item in recommendations
+    )
 
 
 def test_break_below_named_support_recommends_reduce_or_avoid() -> None:
@@ -361,9 +379,9 @@ def test_break_below_named_support_recommends_reduce_or_avoid() -> None:
 
 def test_recommendation_input_rejects_evidence_for_another_market_subject() -> None:
     confirmed = confirmed_bullish_input()
-    foreign_evidence = evidence("Hong Kong evidence", Direction.POSITIVE, Credibility.PRIMARY).model_copy(
-        update={"symbols": ["HK.00700"]}
-    )
+    foreign_evidence = evidence(
+        "Hong Kong evidence", Direction.POSITIVE, Credibility.PRIMARY
+    ).model_copy(update={"symbols": ["HK.00700"]})
 
     with pytest.raises(ValidationError, match="must include recommendation stock symbol"):
         RecommendationInput(
