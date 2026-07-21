@@ -113,7 +113,7 @@ class Evidence(BaseModel):
 class RecommendationInput(BaseModel):
     stock: StockConfig
     technical: TechnicalSnapshot
-    evidence: list[Evidence]
+    evidence: list[Evidence] = Field(min_length=1)
     events: list[EventSignal]
 
     @model_validator(mode="after")

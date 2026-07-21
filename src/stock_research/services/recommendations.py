@@ -26,7 +26,12 @@ _POSITION_LIMITS = {
 class RecommendationEngine:
     def recommend(self, analysis_input: RecommendationInput) -> list[Recommendation]:
         decision = self._decision(analysis_input)
-        holding_impact = self._holding_impact(analysis_input)
+        latest_close = analysis_input.technical.latest_close
+        holding_impact = (
+            self._holding_impact(analysis_input)
+            if isfinite(latest_close) and latest_close > 0
+            else None
+        )
         return [
             Recommendation(
                 horizon=horizon,

@@ -180,6 +180,25 @@ def test_nonfinite_price_data_cannot_return_buy(latest_close: float) -> None:
     assert all(item.confidence is Confidence.LOW for item in recommendations)
 
 
+@pytest.mark.parametrize("latest_close", [float("nan"), float("inf"), float("-inf"), 0.0])
+def test_invalid_price_data_does_not_calculate_holding_impact(latest_close: float) -> None:
+    analysis_input = confirmed_bullish_input(
+        holding=Holding(quantity=Decimal("100"), cost_basis=Decimal("10"))
+    ).model_copy(
+        update={
+            "technical": confirmed_bullish_input().technical.model_copy(
+                update={"latest_close": latest_close}
+            )
+        }
+    )
+
+    recommendations = RecommendationEngine().recommend(analysis_input)
+
+    assert all(item.action is Action.WATCH for item in recommendations)
+    assert all(item.confidence is Confidence.LOW for item in recommendations)
+    assert all(item.holding_impact is None for item in recommendations)
+
+
 def test_positive_international_only_evidence_cannot_return_buy() -> None:
     analysis_input = confirmed_bullish_input().model_copy(
         update={
@@ -204,6 +223,30 @@ def test_positive_international_only_evidence_cannot_return_buy() -> None:
 
     assert all(item.action is Action.WATCH for item in recommendations)
     assert all(item.confidence is Confidence.LOW for item in recommendations)
+
+
+def test_single_international_context_is_valid_nonbuying_and_citable() -> None:
+    analysis_input = confirmed_bullish_input().model_copy(
+        update={
+            "evidence": [
+                evidence(
+                    "US peer demand increases",
+                    Direction.POSITIVE,
+                    Credibility.PRIMARY,
+                    category=EvidenceCategory.INTERNATIONAL,
+                )
+            ]
+        }
+    )
+
+    recommendations = RecommendationEngine().recommend(analysis_input)
+
+    assert all(item.action is Action.WATCH for item in recommendations)
+    assert all(item.evidence_titles == ["US peer demand increases"] for item in recommendations)
+    assert all(
+        str(item.citation_urls[0]) == "https://example.com/us-peer-demand-increases"
+        for item in recommendations
+    )
 
 
 def test_unconfirmed_negative_event_does_not_directly_action_recommendation() -> None:
@@ -327,5 +370,17 @@ def test_recommendation_input_rejects_evidence_for_another_market_subject() -> N
             stock=confirmed.stock,
             technical=confirmed.technical,
             evidence=[foreign_evidence],
+            events=[],
+        )
+
+
+def test_recommendation_input_requires_at_least_one_evidence_citation() -> None:
+    confirmed = confirmed_bullish_input()
+
+    with pytest.raises(ValidationError, match="at least 1 item"):
+        RecommendationInput(
+            stock=confirmed.stock,
+            technical=confirmed.technical,
+            evidence=[],
             events=[],
         )
