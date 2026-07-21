@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from stock_research.db import create_engine_at
 from stock_research.domain.enums import RunStatus
@@ -120,3 +121,16 @@ def test_run_repository_orders_mixed_offsets_by_utc_instant(tmp_path: Path) -> N
 
     assert runs.latest() == later
     assert earlier.started_at.tzinfo is UTC
+
+
+def test_run_record_rejects_finish_before_start() -> None:
+    from stock_research.domain.models import RunRecord
+
+    with pytest.raises(ValidationError, match="finished_at must not be earlier than started_at"):
+        RunRecord(
+            report_date=date(2026, 7, 21),
+            started_at=datetime(2026, 7, 21, 3, 0, tzinfo=UTC),
+            finished_at=datetime(2026, 7, 21, 2, 59, tzinfo=UTC),
+            status=RunStatus.FAILED,
+            stage="build_report",
+        )

@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 import pytest
@@ -71,13 +71,14 @@ def make_request(*research: StockResearchInput) -> DailyRunRequest:
     )
 
 
-def make_bars() -> pd.DataFrame:
+def make_bars(end: date = date(2026, 7, 20)) -> pd.DataFrame:
     rows = []
+    start = end - timedelta(days=79)
     for index in range(80):
         close = 10.0 + index * 0.1
         rows.append(
             {
-                "date": date(2026, 5, 2) + pd.Timedelta(days=index),
+                "date": start + pd.Timedelta(days=index),
                 "open": close - 0.05,
                 "high": close + 0.2,
                 "low": close - 0.2,
@@ -89,13 +90,16 @@ def make_bars() -> pd.DataFrame:
 
 
 class FakeMarketData:
-    def __init__(self, unavailable: set[str] | None = None) -> None:
+    def __init__(
+        self, unavailable: set[str] | None = None, *, bars_end: date = date(2026, 7, 20)
+    ) -> None:
         self.unavailable = unavailable or set()
+        self.bars_end = bars_end
 
     def fetch_daily_bars(self, stock: StockConfig, end: date, days: int = 260) -> pd.DataFrame:
         if stock.symbol in self.unavailable:
             raise MarketDataUnavailable(stock.symbol, "fixture market outage")
-        return make_bars()
+        return make_bars(self.bars_end)
 
 
 def test_builder_creates_complete_analysis_and_preserves_citations() -> None:
@@ -222,5 +226,108 @@ def test_complete_stock_analysis_rejects_uncited_recommendation() -> None:
             {
                 **analysis.model_dump(),
                 "recommendations": [uncited, *analysis.recommendations[1:]],
+            }
+        )
+
+
+def test_jointly_stale_technical_and_research_dates_are_partial() -> None:
+    stock = make_stock()
+    jointly_stale = make_research().model_copy(update={"data_as_of": date(2026, 7, 17)})
+
+    report = ReportBuilder().build(
+        make_request(jointly_stale),
+        [stock],
+        FakeMarketData(bars_end=date(2026, 7, 17)),
+    )
+
+    assert report.run_status is RunStatus.PARTIAL
+    assert "expected last weekday 2026-07-20" in report.analyses[0].data_gaps[0]
+    assert all(item.action is Action.WATCH for item in report.analyses[0].recommendations)
+
+
+def test_monday_report_uses_friday_as_expected_session() -> None:
+    stock = make_stock()
+    friday_research = make_research().model_copy(update={"data_as_of": date(2026, 7, 17)})
+    monday_request = make_request(friday_research).model_copy(
+        update={"report_date": date(2026, 7, 20)}
+    )
+
+    report = ReportBuilder().build(
+        monday_request,
+        [stock],
+        FakeMarketData(bars_end=date(2026, 7, 17)),
+    )
+
+    assert report.run_status is RunStatus.SUCCESS
+
+
+@pytest.mark.parametrize(
+    ("updates", "expected_message"),
+    [
+        ({"action": Action.BUY_IN_TRANCHES}, "uncited data-gap recommendations"),
+        ({"confidence": "medium"}, "uncited data-gap recommendations"),
+        ({"risk_level": "medium"}, "uncited data-gap recommendations"),
+        ({"rationale": ["Generic fallback without a labelled gap."]}, "explicit data-gap"),
+    ],
+)
+def test_uncited_data_gap_recommendation_must_be_conservative_fallback(
+    updates: dict[str, object], expected_message: str
+) -> None:
+    stale = make_research().model_copy(update={"data_as_of": date(2026, 7, 17)})
+    analysis = (
+        ReportBuilder()
+        .build(make_request(stale), [make_stock()], FakeMarketData(bars_end=date(2026, 7, 17)))
+        .analyses[0]
+    )
+    invalid = analysis.recommendations[0].model_copy(update=updates)
+
+    with pytest.raises(ValidationError, match=expected_message):
+        StockAnalysis.model_validate(
+            {
+                **analysis.model_dump(),
+                "recommendations": [invalid, *analysis.recommendations[1:]],
+            }
+        )
+
+
+def test_recommendation_citation_titles_and_urls_must_be_paired() -> None:
+    analysis = (
+        ReportBuilder()
+        .build(make_request(make_research()), [make_stock()], FakeMarketData())
+        .analyses[0]
+    )
+    mismatched = analysis.recommendations[0].model_copy(update={"evidence_titles": ["One"]})
+
+    with pytest.raises(ValidationError, match="paired citation titles and URLs"):
+        StockAnalysis.model_validate(
+            {
+                **analysis.model_dump(),
+                "recommendations": [mismatched, *analysis.recommendations[1:]],
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"evidence_titles": ["", "Local cited source 1"]},
+        {"citation_urls": ["", "https://example.test/SH.600000/1"]},
+    ],
+)
+def test_recommendation_citation_pairs_reject_blank_values(
+    updates: dict[str, list[str]],
+) -> None:
+    analysis = (
+        ReportBuilder()
+        .build(make_request(make_research()), [make_stock()], FakeMarketData())
+        .analyses[0]
+    )
+    blank = analysis.recommendations[0].model_copy(update=updates)
+
+    with pytest.raises(ValidationError, match="nonempty citation titles and URLs"):
+        StockAnalysis.model_validate(
+            {
+                **analysis.model_dump(),
+                "recommendations": [blank, *analysis.recommendations[1:]],
             }
         )

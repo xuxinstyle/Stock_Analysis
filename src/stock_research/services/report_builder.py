@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 
@@ -234,17 +234,25 @@ class ReportBuilder:
         research_date: date,
         report_date: date,
     ) -> str | None:
-        if technical_date > report_date or research_date > report_date:
-            return (
-                f"{stock.symbol}: chronology invalid; technical date {technical_date} and "
-                f"research date {research_date} must be no later than report date {report_date}."
-            )
+        expected_date = ReportBuilder._last_weekday_before(report_date)
         if technical_date != research_date:
             return (
                 f"{stock.symbol}: date mismatch; technical date {technical_date} does not equal "
-                f"research date {research_date}."
+                f"research date {research_date}; expected last weekday {expected_date}."
+            )
+        if technical_date != expected_date:
+            return (
+                f"{stock.symbol}: stale data; technical and research dates are {technical_date}; "
+                f"expected last weekday {expected_date} before report date {report_date}."
             )
         return None
+
+    @staticmethod
+    def _last_weekday_before(report_date: date) -> date:
+        expected = report_date - timedelta(days=1)
+        while expected.weekday() >= 5:
+            expected -= timedelta(days=1)
+        return expected
 
     @staticmethod
     def _percent_change(current: float, previous: float | None) -> float | None:

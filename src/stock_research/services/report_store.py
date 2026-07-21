@@ -8,6 +8,7 @@ from datetime import date
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from pydantic import BaseModel
 
 from stock_research.db import create_engine_at
 from stock_research.domain.enums import Horizon
@@ -89,7 +90,11 @@ class ReportStore:
 
     def _render_html(self, report: DailyReport) -> str:
         template = self._environment.get_template("report.html")
-        return template.render(report=report, recommendation_for=self._recommendation_for)
+        return template.render(
+            report=report,
+            recommendation_for=self._recommendation_for,
+            structured_fields=self._structured_fields,
+        )
 
     @staticmethod
     def _render_markdown(report: DailyReport) -> str:
@@ -140,6 +145,7 @@ class ReportStore:
                 if previous
                 else "数据缺口：无可验证的已完成行情。"
             ),
+            *ReportStore._markdown_structured_fields(previous),
             "",
             "## 基本面分析",
             research.fundamental_summary if research else "数据缺口：缺少研究输入。",
@@ -158,6 +164,7 @@ class ReportStore:
                 if technical
                 else "数据缺口：技术指标不可用。"
             ),
+            *ReportStore._markdown_structured_fields(technical),
             "",
             "## 政策分析",
             research.policy_summary if research else "数据缺口：缺少研究输入。",
@@ -208,6 +215,10 @@ class ReportStore:
                     f"- [{evidence.title}]({evidence.url}) — {evidence.source_name}; "
                     f"可信度 {evidence.credibility.value}"
                 )
+                lines.extend(
+                    f"  - {name}: {value}"
+                    for name, value in ReportStore._structured_fields(evidence)
+                )
         else:
             lines.append("- 无已验证的引用来源。")
         lines.extend(f"- 数据缺口：{gap}" for gap in analysis.data_gaps)
@@ -219,3 +230,28 @@ class ReportStore:
     ) -> Recommendation | None:
         expected = Horizon(horizon)
         return next((item for item in analysis.recommendations if item.horizon is expected), None)
+
+    @staticmethod
+    def _markdown_structured_fields(model: BaseModel | None) -> list[str]:
+        if model is None:
+            return []
+        return [f"- {name}: {value}" for name, value in ReportStore._structured_fields(model)]
+
+    @staticmethod
+    def _structured_fields(model: BaseModel) -> list[tuple[str, str]]:
+        return [
+            (name, ReportStore._display_value(value))
+            for name, value in model.model_dump(mode="json").items()
+        ]
+
+    @staticmethod
+    def _display_value(value: object) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, bool):
+            return str(value).lower()
+        if isinstance(value, list):
+            return ", ".join(ReportStore._display_value(item) for item in value)
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=False, sort_keys=True)
+        return str(value)

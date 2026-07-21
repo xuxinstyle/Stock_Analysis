@@ -37,12 +37,13 @@
     <h2>前日表现与原因</h2>
     {% if analysis.previous_day %}
       <p>数据截至 {{ analysis.previous_day.data_as_of }}，收盘 {{ analysis.previous_day.close }}，变动 {{ analysis.previous_day.change }}；{{ analysis.previous_day.reason }}</p>
+      <dl>{% for name, value in structured_fields(analysis.previous_day) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
     {% else %}<p>数据缺口：无可验证的已完成行情。</p>{% endif %}
     <h2>基本面分析</h2><p>{{ analysis.research.fundamental_summary if analysis.research else "数据缺口：缺少研究输入。" }}</p>
     <h2>行业分析</h2>
     {% if analysis.research %}<p>{{ analysis.research.industry_summary }}</p><p>产品价格：{{ analysis.research.product_price_summary }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}
     <h2>技术面分析</h2>
-    {% if analysis.technical %}<p>数据截至 {{ analysis.technical.data_as_of }}，收盘 {{ analysis.technical.latest_close }}，趋势 {{ analysis.technical.trend.value }}，RSI(14) {{ analysis.technical.rsi_14 }}。</p>{% else %}<p>数据缺口：技术指标不可用。</p>{% endif %}
+    {% if analysis.technical %}<p>数据截至 {{ analysis.technical.data_as_of }}，收盘 {{ analysis.technical.latest_close }}，趋势 {{ analysis.technical.trend.value }}，RSI(14) {{ analysis.technical.rsi_14 }}。</p><dl>{% for name, value in structured_fields(analysis.technical) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% else %}<p>数据缺口：技术指标不可用。</p>{% endif %}
     <h2>政策分析</h2><p>{{ analysis.research.policy_summary if analysis.research else "数据缺口：缺少研究输入。" }}</p>
     <h2>消息面分析</h2>
     {% if analysis.research %}<p>{{ analysis.research.news_summary }}</p><p>国际传导：{{ analysis.research.international_summary }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}
@@ -69,7 +70,7 @@
     <h2>来源与数据缺口</h2>
     <ul>
     {% if analysis.research %}
-      {% for evidence in analysis.research.evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> — {{ evidence.source_name }}; 可信度 {{ evidence.credibility.value }}</li>{% else %}<li>无已验证的引用来源。</li>{% endfor %}
+      {% for evidence in analysis.research.evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> — {{ evidence.source_name }}; 可信度 {{ evidence.credibility.value }}<dl>{% for name, value in structured_fields(evidence) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>无已验证的引用来源。</li>{% endfor %}
     {% else %}<li>无已验证的引用来源。</li>{% endif %}
     {% for gap in analysis.data_gaps %}<li>数据缺口：{{ gap }}</li>{% endfor %}
     </ul>

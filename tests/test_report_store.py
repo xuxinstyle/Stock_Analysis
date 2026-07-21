@@ -107,3 +107,17 @@ def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Pat
     for content in rendered:
         assert all(fact in content for fact in expected_facts)
     assert 'href="https://example.test/confirmed-event"' in rendered[2]
+
+    analysis = report.analyses[0]
+    structured_models = [
+        analysis.previous_day,
+        analysis.technical,
+        *analysis.research.evidence,
+    ]
+    for model in structured_models:
+        assert model is not None
+        for field_name, field_value in ReportStore._structured_fields(model):
+            assert field_name in rendered[1]
+            assert field_name in rendered[2]
+            assert field_value in rendered[1]
+            assert field_value in rendered[2]

@@ -221,10 +221,30 @@ class StockAnalysis(BaseModel):
         }
         if any(count != 1 for count in counts.values()):
             raise ValueError("stock analysis requires exactly one recommendation per horizon")
-        if not self.data_gaps and any(
-            not item.evidence_titles or not item.citation_urls for item in self.recommendations
-        ):
-            raise ValueError("valid analyses require cited recommendations")
+        for recommendation in self.recommendations:
+            titles = recommendation.evidence_titles
+            urls = recommendation.citation_urls
+            if len(titles) != len(urls):
+                raise ValueError("recommendations require paired citation titles and URLs")
+            if titles and (
+                any(not title.strip() for title in titles)
+                or any(not str(url).strip() for url in urls)
+            ):
+                raise ValueError("recommendations require nonempty citation titles and URLs")
+            if titles:
+                continue
+            if not self.data_gaps:
+                raise ValueError("valid analyses require cited recommendations")
+            if not (
+                recommendation.action is Action.WATCH
+                and recommendation.confidence is Confidence.LOW
+                and recommendation.risk_level is RiskLevel.HIGH
+            ):
+                raise ValueError(
+                    "uncited data-gap recommendations must be WATCH with LOW confidence and HIGH risk"
+                )
+            if not any("data-gap" in reason.casefold() for reason in recommendation.rationale):
+                raise ValueError("uncited fallbacks require explicit data-gap rationale")
         return self
 
 
@@ -259,3 +279,9 @@ class RunRecord(BaseModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("run timestamps must include a UTC offset")
         return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def validate_run_chronology(self) -> Self:
+        if self.finished_at < self.started_at:
+            raise ValueError("finished_at must not be earlier than started_at")
+        return self
