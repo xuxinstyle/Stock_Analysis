@@ -115,7 +115,18 @@ def test_daily_research_prompt_has_explicit_pre_and_post_market_modes() -> None:
     assert "23:00 China Standard Time" in readme
     assert "pre_market" in readme
     assert "post_market" in readme
-    assert "<app-home>/reports/YYYY-MM-DD/<slot>/" in readme
+    assert (
+        "For `post_market`, a confirmed trading market may set `completed_session` and "
+        "`data_as_of` to `report_date` with `is_closed` set to `false`."
+    ) in prompt
+    assert (
+        "For `post_market`, a holiday/non-trading market or an unverified close, daily data, "
+        "or event must use the last verifiable prior session."
+    ) in prompt
+    assert "last completed trading session before the run" not in prompt
+    assert "<app-home>/reports/YYYY-MM-DD/<slot>/" not in readme
+    assert "<app-home>/reports/YYYY-MM-DD/pre-market/" in readme
+    assert "<app-home>/reports/YYYY-MM-DD/post-market/" in readme
 
 
 def test_readme_documents_read_only_failed_run_inspection() -> None:

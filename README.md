@@ -133,9 +133,9 @@ not expose a hostname, URL, proxy detail, or raw network exception in report pro
 ## Outputs and interpretation
 
 Each manual or legacy run without a slot is saved below `<app-home>/reports/YYYY-MM-DD/` as
-`report.json`, `report.md`, and `report.html`. Automatic slot reports are stored separately below
-`<app-home>/reports/YYYY-MM-DD/<slot>/`, where `pre_market` uses `pre-market` and `post_market`
-uses `post-market`, so the two reports cannot overwrite each other. All formats retain the stock identity, report and generation dates, market state,
+`report.json`, `report.md`, and `report.html`. Automatic pre-market reports are stored at
+`<app-home>/reports/YYYY-MM-DD/pre-market/`, and automatic post-market reports are stored at
+`<app-home>/reports/YYYY-MM-DD/post-market/`, so the two reports cannot overwrite each other. All formats retain the stock identity, report and generation dates, market state,
 data-as-of dates, warnings, data gaps, disclaimer, analysis sections, short/medium/long horizons,
 and source links. Markdown and HTML render daily volume and prior-day volume in shares (`股`) and
 volume change as a percentage (`%`); JSON retains the corresponding numeric fields for machine

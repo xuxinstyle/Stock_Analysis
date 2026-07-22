@@ -57,11 +57,13 @@ must be Simplified Chinese. Preserve the source title and URL exactly as supplie
 
 1. Read every active configured symbol, name, market, industry, and holding context. Cover every
    configured market: A-share (`SH.` / `SZ.`), Beijing Stock Exchange (`BJ.`), and Hong Kong (`HK.`), when present.
-2. Identify each market's last completed trading session before the run. Record one
-   `market_sessions` entry for each configured market with its `completed_session` and
-   `is_closed` status on the report date. A closed market must use its prior completed session;
-   label holidays, suspensions, delayed quotes, and unavailable data as data gaps; never present
-   an incomplete session as a completed one.
+2. Resolve each market's completed session by `run_slot`. For `pre_market`, use the last completed
+   trading session before the report date. For `post_market`, a confirmed trading market may set `completed_session` and `data_as_of` to `report_date` with `is_closed` set to `false`. For `post_market`, a holiday/non-trading market or an unverified close, daily data, or event must use the last verifiable prior session. Record one `market_sessions` entry for each configured
+   market with its `completed_session` and `is_closed` status on the report date. Set `is_closed`
+   to `true` only for a market that did not trade on the report date. A closed market must use its
+   last verifiable prior session. Label holidays, suspensions, delayed quotes, and unavailable data
+   as Simplified Chinese data gaps; never present an
+   incomplete session as a completed one.
 3. Use web search and inspect the source pages. Prefer primary sources in this order when
    available: exchange filings and announcements, company investor-relations disclosures,
    government or regulator publications, and official market or product-price publications.
@@ -69,7 +71,7 @@ must be Simplified Chinese. Preserve the source title and URL exactly as supplie
    lower credibility.
 4. For each configured symbol, research and cite:
    - exchange/company disclosures, earnings or operating context, and company news;
-   - last-completed-session price and volume context;
+   - price and volume context for the completed session resolved by `run_slot`;
    - industry conditions, sector demand/supply, and sector/product prices;
    - Chinese, Hong Kong, or other applicable policy and regulatory developments;
    - US peers, US market drivers, and international transmission channels that could affect
@@ -125,9 +127,10 @@ derives recommendations from the cited research.
 Create one `StockResearchInput` for every active configured symbol. Fill all six research
 summaries and events for each subject. Each summary must be nonblank; a nonblank gap statement
 is required when evidence is unavailable. Do not create a fabricated citation to make a summary
-appear complete. Include at most one `market_sessions` entry for each configured market. Set
-`is_closed` to `true` only when that market is closed on `report_date`, and use the last completed
-session date rather than treating the market as available on the report date.
+appear complete. Include at most one `market_sessions` entry for each configured market. For
+`post_market`, use `report_date` with `is_closed: false` only for a confirmed trading market with
+verified completed daily data; otherwise use the last verifiable prior session and a Simplified
+Chinese data gap. Set `is_closed` to `true` only when that market did not trade on `report_date`.
 
 For every `evidence` entry include all of these schema fields:
 
