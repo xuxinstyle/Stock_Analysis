@@ -76,12 +76,16 @@ not contain broker credentials, orders, or model API credentials.
 ## Daily research workflow
 
 The Codex App prompt is [docs/automation/daily-research-prompt.md](docs/automation/daily-research-prompt.md).
-It tells Codex to read the SQLite-backed active A-share/BSE/Hong Kong set, research the last completed
-sessions, preserve source metadata, label unverified or conflicting claims, write one
-`DailyRunRequest` JSON file, validate it, generate the report, and inspect the outputs. Running
-that automation requires the Codex App to be available; it does not require user-supplied model
-API credentials. The automation is a research handoff, not an operating-system scheduler or a
-broker integration.
+The two automatic tasks use this same prompt: 09:00 China Standard Time passes `pre_market`, and
+23:00 China Standard Time passes `post_market`. Automatic requests must always include one of these
+explicit `run_slot` values. The post-market task may use the report date as a market's completed
+session only after it confirms that market has closed; otherwise it records a Simplified Chinese
+data gap and uses the last verifiable session. The prompt tells Codex to read the SQLite-backed
+active A-share/BSE/Hong Kong set, preserve source titles and URLs, write Simplified Chinese research
+summaries/event descriptions/data-gap explanations, validate one `DailyRunRequest` JSON file,
+generate the report, and inspect the outputs. Running that automation requires the Codex App to be
+available; it does not require user-supplied model API credentials. The automation is a research
+handoff, not an operating-system scheduler or a broker integration.
 
 For a manual run, place the cited request in the inbox and use these commands:
 
@@ -128,8 +132,10 @@ not expose a hostname, URL, proxy detail, or raw network exception in report pro
 
 ## Outputs and interpretation
 
-Each run is saved below `<app-home>/reports/YYYY-MM-DD/` as `report.json`, `report.md`, and
-`report.html`. All formats retain the stock identity, report and generation dates, market state,
+Each manual or legacy run without a slot is saved below `<app-home>/reports/YYYY-MM-DD/` as
+`report.json`, `report.md`, and `report.html`. Automatic slot reports are stored separately below
+`<app-home>/reports/YYYY-MM-DD/<slot>/`, where `pre_market` uses `pre-market` and `post_market`
+uses `post-market`, so the two reports cannot overwrite each other. All formats retain the stock identity, report and generation dates, market state,
 data-as-of dates, warnings, data gaps, disclaimer, analysis sections, short/medium/long horizons,
 and source links. Markdown and HTML render daily volume and prior-day volume in shares (`股`) and
 volume change as a percentage (`%`); JSON retains the corresponding numeric fields for machine

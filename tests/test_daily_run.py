@@ -94,6 +94,30 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
     assert ".stock-research/config/stocks.yaml" not in readme
 
 
+def test_daily_research_prompt_has_explicit_pre_and_post_market_modes() -> None:
+    prompt = DAILY_RESEARCH_PROMPT.read_text(encoding="utf-8")
+    readme = README.read_text(encoding="utf-8")
+
+    required_instructions = (
+        "09:00 China Standard Time",
+        "23:00 China Standard Time",
+        "pre_market",
+        "post_market",
+        "\u5f53\u5929\u6536\u76d8\u3001\u6da8\u8dcc\u3001\u6210\u4ea4\u91cf",
+        "\u786e\u8ba4\u5f53\u65e5\u5e02\u573a\u5df2\u7ecf\u6536\u5e02",
+        "\u6700\u540e\u53ef\u9a8c\u8bc1\u4f1a\u8bdd",
+        "\u4fdd\u7559\u6570\u636e\u7f3a\u53e3",
+    )
+    for instruction in required_instructions:
+        assert instruction in prompt
+
+    assert "09:00 China Standard Time" in readme
+    assert "23:00 China Standard Time" in readme
+    assert "pre_market" in readme
+    assert "post_market" in readme
+    assert "<app-home>/reports/YYYY-MM-DD/<slot>/" in readme
+
+
 def test_readme_documents_read_only_failed_run_inspection() -> None:
     readme = README.read_text(encoding="utf-8")
 

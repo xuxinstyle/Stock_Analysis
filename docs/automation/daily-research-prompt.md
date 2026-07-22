@@ -1,9 +1,10 @@
 # Codex daily A-share, BSE, and Hong Kong research handoff
 
-Use this document as the prompt body for the local Codex App daily automation. Run it in
-the `E:\Stock_Analysis` project at 09:00 China Standard Time. This is a research-only
-workflow: it produces a `DailyRunRequest` JSON document and a local report; it does not
-place trades.
+Use this one shared document as the prompt body for both local Codex App automatic research
+tasks in the `E:\Stock_Analysis` project. The 09:00 China Standard Time task must pass
+`pre_market`; the 23:00 China Standard Time task must pass `post_market`. This is a
+research-only workflow: it produces a `DailyRunRequest` JSON document and a local report; it
+does not place trades.
 
 ## Safety and scope
 
@@ -31,6 +32,26 @@ place trades.
   blocking data gap; do not silently substitute the example configuration.
 - Treat the result as research, not personalized investment advice. Do not change the
   configured stock list, source code, or prior reports.
+
+## Automatic run mode (required)
+
+The invoking automatic task must explicitly provide exactly one `run_slot` value. Never omit it
+or infer it from the clock.
+
+- `pre_market` (09:00 China Standard Time): use the last completed trading session before the
+  report date for every market. Do not describe an incomplete current-day session as closed or
+  complete.
+- `post_market` (23:00 China Standard Time): first confirm that each applicable market has
+  closed for the report date. 确认当日市场已经收市；only after that confirmation may its
+  `completed_session` and `data_as_of` equal the report date. Cover that day's close, price
+  change, volume, technical context, and intraday/post-market events. In all auto-generated prose,
+  write the corresponding descriptions as Simplified Chinese: 当天收盘、涨跌、成交量、技术面，以及盘中和盘后事件。
+- Safe fallback: if same-day closing status, completed daily data, or an event cannot be verified,
+  retain a Simplified Chinese data-gap explanation, use the last verifiable session, and do not
+  claim same-day completed coverage. 保留数据缺口，并使用最后可验证会话。
+
+For either mode, auto-generated research summaries, event descriptions, and data-gap explanations
+must be Simplified Chinese. Preserve the source title and URL exactly as supplied by the source.
 
 ## Research procedure
 
@@ -75,6 +96,7 @@ derives recommendations from the cited research.
 ```json
 {
   "report_date": "YYYY-MM-DD",
+  "run_slot": "pre_market or post_market",
   "generated_at": "YYYY-MM-DDTHH:MM:SS+08:00",
   "market_sessions": [
     {
