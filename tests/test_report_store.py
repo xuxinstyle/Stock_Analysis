@@ -126,6 +126,29 @@ def test_report_store_keeps_legacy_path_when_run_slot_is_null(tmp_path: Path) ->
     assert paths.json.parent == tmp_path / "2026-07-21"
 
 
+def test_load_read_only_prefers_post_then_pre_then_legacy_report(tmp_path: Path) -> None:
+    report_date = date(2026, 7, 21)
+    reports = {
+        tmp_path / "2026-07-21" / "report.json": make_complete_report(),
+        tmp_path / "2026-07-21" / "pre-market" / "report.json": make_complete_report().model_copy(
+            update={"run_slot": "pre_market"}
+        ),
+        tmp_path / "2026-07-21" / "post-market" / "report.json": make_complete_report().model_copy(
+            update={"run_slot": "post_market"}
+        ),
+    }
+    for path, report in reports.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
+    assert ReportStore.load_read_only(tmp_path, report_date).run_slot == "post_market"
+    (tmp_path / "2026-07-21" / "post-market" / "report.json").unlink()
+    assert ReportStore.load_read_only(tmp_path, report_date).run_slot == "pre_market"
+    (tmp_path / "2026-07-21" / "pre-market" / "report.json").unlink()
+    assert ReportStore.load_read_only(tmp_path, report_date).run_slot is None
+    assert not (tmp_path / "reports.sqlite3").exists()
+
+
 @pytest.mark.parametrize("run_slot", ["invalid", "../outside", "post-market"])
 def test_report_store_rejects_invalid_run_slot(tmp_path: Path, run_slot: str) -> None:
     with pytest.raises(ValueError, match="运行时段"):

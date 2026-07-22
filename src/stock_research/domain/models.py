@@ -211,8 +211,7 @@ class DailyRunRequest(BaseModel):
             raise ValueError("market session metadata must contain each market at most once")
         for session in self.market_sessions:
             if session.completed_session > self.report_date or (
-                self.run_slot != "post_market"
-                and session.completed_session == self.report_date
+                self.run_slot != "post_market" and session.completed_session == self.report_date
             ):
                 raise ValueError("market session completed_session must precede report_date")
             if session.is_closed and session.completed_session == self.report_date:

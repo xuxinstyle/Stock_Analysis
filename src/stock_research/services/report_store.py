@@ -282,11 +282,16 @@ class ReportStore:
 
     @staticmethod
     def load_read_only(root: Path, report_date: date) -> DailyReport | None:
-        path = Path(root) / report_date.isoformat() / "report.json"
-        try:
-            return DailyReport.model_validate_json(path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            return None
+        date_directory = Path(root) / report_date.isoformat()
+        for directory in ("post-market", "pre-market", None):
+            path = date_directory / "report.json"
+            if directory is not None:
+                path = date_directory / directory / "report.json"
+            try:
+                return DailyReport.model_validate_json(path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                continue
+        return None
 
     @staticmethod
     def _atomic_write(path: Path, content: str) -> None:

@@ -132,7 +132,10 @@ def test_generate_notifies_from_post_market_report_path(
     result = runner.invoke(app, ["generate", "--input", str(request_path)])
 
     assert result.exit_code == 0
-    assert notified_paths[0].markdown == tmp_path / "reports" / "2026-07-21" / "post-market" / "report.md"
+    assert (
+        notified_paths[0].markdown
+        == tmp_path / "reports" / "2026-07-21" / "post-market" / "report.md"
+    )
     assert "post-market" in result.stdout
 
 
@@ -483,6 +486,37 @@ def test_report_displays_a_selected_saved_report_without_generating(
     assert result.exit_code == 0
     assert '"report_date": "2026-07-21"' in result.stdout
     assert '"run_status": "success"' in result.stdout
+
+
+def test_report_reads_a_post_market_report_without_creating_a_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    report_root = tmp_path / "reports"
+    slot_directory = report_root / "2026-07-21" / "post-market"
+    slot_directory.mkdir(parents=True)
+    (slot_directory / "report.json").write_text(
+        DailyReport(
+            report_date=date(2026, 7, 21),
+            run_slot="post_market",
+            generated_at=datetime(2026, 7, 21, 15, 0, tzinfo=UTC),
+            run_status=RunStatus.SUCCESS,
+            analyses=[],
+        ).model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+    files_before = {
+        path.relative_to(report_root) for path in report_root.rglob("*") if path.is_file()
+    }
+
+    result = runner.invoke(app, ["report", "2026-07-21"])
+
+    assert result.exit_code == 0
+    assert '"run_slot": "post_market"' in result.stdout
+    assert files_before == {
+        path.relative_to(report_root) for path in report_root.rglob("*") if path.is_file()
+    }
+    assert not (report_root / "reports.sqlite3").exists()
 
 
 def test_report_returns_not_found_for_a_missing_saved_date(
