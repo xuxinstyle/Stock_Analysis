@@ -153,6 +153,21 @@ _FIELD_DISPLAY_VALUES = {
     "confidence": {"medium": "中等"},
 }
 
+_ENUM_DISPLAY_FIELDS = {
+    "market",
+    "trend",
+    "horizon",
+    "action",
+    "risk_level",
+    "confidence",
+    "run_status",
+    "direction",
+    "scope",
+    "category",
+    "credibility",
+    "status",
+}
+
 _LEGACY_SYSTEM_TEXT = {
     (
         "Research-only report; not personalized investment advice, a return guarantee, "
@@ -293,7 +308,8 @@ class ReportStore:
             f"# 每日股票研究报告 — {report.report_date.isoformat()}",
             "",
             f"- {ReportStore._display_field('generated_at')}：{report.generated_at.isoformat()}",
-            f"- {ReportStore._display_field('run_status')}：{ReportStore._display_value(report.run_status.value)}",
+            f"- {ReportStore._display_field('run_status')}："
+            f"{ReportStore._display_value(report.run_status.value, 'run_status')}",
             f"- {ReportStore._display_field('disclaimer')}："
             f"{ReportStore._display_value(report.disclaimer, 'disclaimer')}",
             "",
@@ -303,7 +319,8 @@ class ReportStore:
             for status in report.market_statuses:
                 data_as_of = ReportStore._display_value(status.data_as_of)
                 lines.append(
-                    f"- {ReportStore._display_value(status.market.value)}：{ReportStore._display_value(status.status)}；"
+                    f"- {ReportStore._display_value(status.market.value, 'market')}："
+                    f"{ReportStore._display_value(status.status, 'status')}；"
                     f"{ReportStore._display_field('data_as_of')}：{data_as_of}；"
                     f"{ReportStore._display_value(status.message, 'message')}"
                 )
@@ -374,7 +391,8 @@ class ReportStore:
             "## 技术面分析",
             (
                 f"数据截至 {technical.data_as_of.isoformat()}，收盘 {technical.latest_close:.4f}，"
-                f"趋势 {ReportStore._display_value(technical.trend.value)}，RSI(14) {technical.rsi_14}。"
+                f"趋势 {ReportStore._display_value(technical.trend.value, 'trend')}，"
+                f"RSI(14) {technical.rsi_14}。"
                 if technical
                 else "数据缺口：技术指标不可用。"
             ),
@@ -413,7 +431,7 @@ class ReportStore:
                 lines.extend(
                     [
                         f"- {ReportStore._display_field('action')}："
-                        f"{ReportStore._display_value(recommendation.action.value)}",
+                        f"{ReportStore._display_value(recommendation.action.value, 'action')}",
                         f"- {ReportStore._display_field('risk_level')}/"
                         f"{ReportStore._display_field('confidence')}："
                         f"{ReportStore._display_value(recommendation.risk_level.value, 'risk_level')}/"
@@ -435,7 +453,7 @@ class ReportStore:
                 lines.append(
                     f"- [{evidence.title}]({evidence.url}) — {evidence.source_name}；"
                     f"{ReportStore._display_field('credibility')} "
-                    f"{ReportStore._display_value(evidence.credibility.value)}"
+                    f"{ReportStore._display_value(evidence.credibility.value, 'credibility')}"
                 )
                 lines.extend(
                     f"  - {name}：{value}"
@@ -545,7 +563,9 @@ class ReportStore:
             contextual_display = _FIELD_DISPLAY_VALUES.get(field_name, {}).get(str(value))
             if contextual_display is not None:
                 return contextual_display
-        return _DISPLAY_VALUES.get(str(value), str(value))
+        if field_name in _ENUM_DISPLAY_FIELDS:
+            return _DISPLAY_VALUES.get(str(value), str(value))
+        return str(value)
 
     @staticmethod
     def _legacy_price_data_gap(value: str, field_name: str | None) -> str | None:

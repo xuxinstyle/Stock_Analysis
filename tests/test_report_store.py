@@ -424,6 +424,45 @@ def test_legacy_system_text_collision_does_not_translate_source_owned_fields(
     )
 
 
+def test_source_owned_fields_preserve_enum_like_strings(tmp_path: Path) -> None:
+    payload = make_legacy_report_payload()
+    analysis = payload["analyses"][0]
+    research = analysis["research"]
+    research["evidence"][0]["title"] = "news"
+    research["evidence"][0]["source_name"] = "company"
+    research["events"] = [
+        {
+            "title": "news",
+            "occurred_at": "2026-07-20T12:00:00Z",
+            "direction": "neutral",
+            "summary": "A sufficiently detailed source-owned event summary.",
+            "symbols": ["SH.600000"],
+            "scope": "local",
+            "is_confirmed": True,
+            "citation_title": "watch",
+            "citation_url": "https://example.test/SH.600000/event",
+        }
+    ]
+    analysis["recommendations"][0]["evidence_titles"] = ["low"]
+    analysis["recommendations"][0]["citation_urls"] = [
+        "https://example.test/SH.600000/recommendation"
+    ]
+
+    paths = ReportStore(tmp_path).save(DailyReport.model_validate(payload))
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+
+    for field_name, source_value in (
+        ("标题", "news"),
+        ("来源名称", "company"),
+        ("引用标题", "watch"),
+    ):
+        assert f"- {field_name}：{source_value}" in markdown
+        assert f"<dt>{field_name}</dt><dd>{source_value}</dd>" in html
+    assert "- 建议依据标题：low" in markdown
+    assert "<dt>依据标题</dt><dd>low</dd>" in html
+
+
 def test_contextual_medium_labels_render_in_markdown_and_html(tmp_path: Path) -> None:
     report = make_complete_report()
     analysis = report.analyses[0]

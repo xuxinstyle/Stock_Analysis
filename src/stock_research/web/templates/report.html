@@ -25,7 +25,7 @@
     <dl>
       <dt>{{ display_field("report_date") }}</dt><dd>{{ report.report_date }}</dd>
       <dt>{{ display_field("generated_at") }}</dt><dd>{{ report.generated_at.isoformat() }}</dd>
-      <dt>{{ display_field("run_status") }}</dt><dd>{{ display_value(report.run_status.value) }}</dd>
+      <dt>{{ display_field("run_status") }}</dt><dd>{{ display_value(report.run_status.value, "run_status") }}</dd>
     </dl>
     <div class="notice research-notice"><strong>仅供研究使用</strong><span>{{ display_value(report.disclaimer, "disclaimer") }}</span></div>
   </header>
