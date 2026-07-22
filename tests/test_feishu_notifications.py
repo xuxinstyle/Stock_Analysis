@@ -16,9 +16,9 @@ from stock_research.services.feishu_notifications import (
 @dataclass(frozen=True)
 class FakeResponse:
     status_code: int
-    payload: dict[str, object]
+    payload: object
 
-    def json(self) -> dict[str, object]:
+    def json(self) -> object:
         return self.payload
 
 
@@ -61,6 +61,15 @@ def test_rejects_non_feishu_or_non_v2_webhook_urls() -> None:
         FeishuNotificationService("https://open.feishu.cn/open-apis/bot/hook/token")
 
 
+def test_rejects_webhook_paths_that_do_not_contain_exactly_one_token() -> None:
+    for webhook_url in (
+        "https://open.feishu.cn/open-apis/bot/v2/hook/token/extra",
+        "https://open.feishu.cn/open-apis/bot/v2/hook//",
+    ):
+        with pytest.raises(FeishuNotificationError, match="HTTPS V2"):
+            FeishuNotificationService(webhook_url)
+
+
 def test_send_rejects_a_feishu_business_error() -> None:
     service = FeishuNotificationService(
         "https://open.feishu.cn/open-apis/bot/v2/hook/test-token",
@@ -69,6 +78,17 @@ def test_send_rejects_a_feishu_business_error() -> None:
     )
 
     with pytest.raises(FeishuNotificationError, match="service rejected request"):
+        service.send_markdown(date(2026, 7, 22), "# 完整报告")
+
+
+def test_send_rejects_a_non_object_json_response() -> None:
+    service = FeishuNotificationService(
+        "https://open.feishu.cn/open-apis/bot/v2/hook/test-token",
+        post=lambda url, **kwargs: FakeResponse(200, []),
+        sleep=lambda seconds: None,
+    )
+
+    with pytest.raises(FeishuNotificationError, match="invalid response"):
         service.send_markdown(date(2026, 7, 22), "# 完整报告")
 
 

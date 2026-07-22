@@ -23,7 +23,7 @@ class FeishuNotificationError(RuntimeError):
 class HttpResponse(Protocol):
     status_code: int
 
-    def json(self) -> Mapping[str, object]: ...
+    def json(self) -> object: ...
 
 
 class HttpPost(Protocol):
@@ -160,11 +160,13 @@ class FeishuNotificationService:
     @staticmethod
     def _validate_webhook_url(webhook_url: str) -> None:
         parsed = urlparse(webhook_url)
+        path_parts = parsed.path.split("/")
         if (
             parsed.scheme != "https"
             or parsed.netloc != "open.feishu.cn"
-            or not parsed.path.startswith("/open-apis/bot/v2/hook/")
-            or parsed.path == "/open-apis/bot/v2/hook/"
+            or path_parts[:5] != ["", "open-apis", "bot", "v2", "hook"]
+            or len(path_parts) != 6
+            or not path_parts[-1]
             or parsed.params
             or parsed.query
             or parsed.fragment
@@ -183,6 +185,10 @@ class FeishuNotificationService:
             raise FeishuNotificationError(
                 f"Feishu notification failed for segment {segment_number}: invalid response"
             ) from error
+        if not isinstance(payload, Mapping):
+            raise FeishuNotificationError(
+                f"Feishu notification failed for segment {segment_number}: invalid response"
+            )
         status_code = payload.get("StatusCode", payload.get("code"))
         if status_code != 0:
             raise FeishuNotificationError(
