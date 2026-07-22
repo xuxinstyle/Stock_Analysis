@@ -378,6 +378,52 @@ def test_real_legacy_report_renders_safe_chinese_without_mutating_saved_json(
     assert rendered_analysis["recommendations"] == payload["analyses"][0]["recommendations"]
 
 
+def test_legacy_system_text_collision_does_not_translate_source_owned_fields(
+    tmp_path: Path,
+) -> None:
+    legacy_title = (
+        "Research-only report; not personalized investment advice, a return guarantee, "
+        "or an instruction to trade."
+    )
+    payload = make_legacy_report_payload()
+    analysis = payload["analyses"][0]
+    research = analysis["research"]
+    research["evidence"][0]["title"] = legacy_title
+    research["evidence"][0]["source_name"] = legacy_title
+    research["evidence"][0]["summary"] = legacy_title
+    research["events"] = [
+        {
+            "title": "Legacy source-owned title collision",
+            "occurred_at": "2026-07-20T12:00:00Z",
+            "direction": "neutral",
+            "summary": legacy_title,
+            "symbols": ["SH.600000"],
+            "scope": "local",
+            "is_confirmed": True,
+            "citation_title": legacy_title,
+            "citation_url": "https://example.test/SH.600000/event",
+        }
+    ]
+    for recommendation in analysis["recommendations"]:
+        recommendation["evidence_titles"] = [legacy_title]
+        recommendation["citation_urls"] = ["https://example.test/SH.600000/recommendation"]
+
+    paths = ReportStore(tmp_path).save(DailyReport.model_validate(payload))
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+
+    for field_name in ("标题", "来源名称", "摘要", "引用标题"):
+        assert f"- {field_name}：{legacy_title}" in markdown
+        assert f"<dt>{field_name}</dt><dd>{legacy_title}</dd>" in html
+    assert f"- 建议依据标题：{legacy_title}" in markdown
+    assert f"<dt>依据标题</dt><dd>{legacy_title}</dd>" in html
+    assert "免责声明：本报告仅供研究参考，不构成个性化投资建议、收益保证或交易指令。" in markdown
+    assert (
+        '<div class="notice research-notice"><strong>仅供研究使用</strong><span>'
+        "本报告仅供研究参考，不构成个性化投资建议、收益保证或交易指令。</span>" in html
+    )
+
+
 def test_contextual_medium_labels_render_in_markdown_and_html(tmp_path: Path) -> None:
     report = make_complete_report()
     analysis = report.analyses[0]

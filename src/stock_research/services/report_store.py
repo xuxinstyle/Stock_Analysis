@@ -177,6 +177,13 @@ _LEGACY_SYSTEM_TEXT = {
         "失效条件：缺失数据仍不可获得或无法核验。"
     ),
 }
+_LEGACY_SYSTEM_TEXT_FIELDS = {
+    "disclaimer",
+    "message",
+    "trigger",
+    "observation_or_target",
+    "invalidation",
+}
 _LEGACY_PRICE_DATA_FIELDS = {"data_gaps", "reason", "rationale", "run_warnings"}
 _LEGACY_CLOSED_STATUS = re.compile(
     r"Market was closed on report date (\d{4}-\d{2}-\d{2}); prior completed session "
@@ -518,15 +525,16 @@ class ReportStore:
                 for key, item in sorted(value.items())
             )
         if isinstance(value, str):
-            legacy_text = _LEGACY_SYSTEM_TEXT.get(value)
-            if legacy_text is not None:
-                return legacy_text
-            closed_status = _LEGACY_CLOSED_STATUS.fullmatch(value)
-            if closed_status is not None:
-                return (
-                    f"报告日 {closed_status.group(1)} 市场休市；所有已配置股票均使用前一已完成"
-                    "交易日的最新数据。"
-                )
+            if field_name in _LEGACY_SYSTEM_TEXT_FIELDS:
+                legacy_text = _LEGACY_SYSTEM_TEXT.get(value)
+                if legacy_text is not None:
+                    return legacy_text
+                closed_status = _LEGACY_CLOSED_STATUS.fullmatch(value)
+                if field_name == "message" and closed_status is not None:
+                    return (
+                        f"报告日 {closed_status.group(1)} 市场休市；"
+                        "所有已配置股票均使用前一已完成交易日的最新数据。"
+                    )
             legacy_gap = ReportStore._legacy_price_data_gap(value, field_name)
             if legacy_gap is not None:
                 return legacy_gap

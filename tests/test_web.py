@@ -96,6 +96,30 @@ def test_report_page_sanitizes_legacy_system_copy_and_provider_diagnostics(
         assert forbidden not in response.text
 
 
+def test_dashboard_sanitizes_legacy_system_copy_and_provider_diagnostics(
+    client: TestClient,
+) -> None:
+    report = DailyReport.model_validate(make_legacy_report_payload())
+    client.app.state.services.reports.save(report)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "本报告仅供研究参考，不构成个性化投资建议、收益保证或交易指令。" in response.text
+    assert "已配置股票的已完成交易日数据不可用或已过期。" in response.text
+    assert "SH.600000：未能取得完整的日行情数据，已暂缓技术分析。" in response.text
+    for forbidden in (
+        "Research-only report",
+        "Completed session data",
+        "Data-gap fallback:",
+        "HTTPSConnectionPool",
+        "private.example",
+        "proxy.internal",
+        "proxy URL",
+    ):
+        assert forbidden not in response.text
+
+
 def test_report_page_preserves_report_facts_disclaimer_gaps_and_source_links(
     client: TestClient,
 ) -> None:
