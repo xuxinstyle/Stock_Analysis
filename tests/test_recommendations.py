@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Callable
 
 import pandas as pd
 import pytest
@@ -66,6 +67,56 @@ def conflicting_input() -> RecommendationInput:
     )
 
 
+def held_position() -> Holding:
+    return Holding(quantity=Decimal("100"), cost_basis=Decimal("10"))
+
+
+def safety_downgrade_input() -> RecommendationInput:
+    confirmed = confirmed_bullish_input(holding=held_position())
+    return confirmed.model_copy(
+        update={"technical": confirmed.technical.model_copy(update={"realized_volatility_20": 0.5})}
+    )
+
+
+def confirmed_local_negative_event_input() -> RecommendationInput:
+    confirmed = confirmed_bullish_input(holding=held_position())
+    return confirmed.model_copy(
+        update={
+            "events": [
+                EventSignal(
+                    title="Confirmed adverse regulatory action",
+                    occurred_at=datetime(2026, 7, 20, tzinfo=UTC),
+                    direction=Direction.NEGATIVE,
+                    summary="A confirmed event materially weakens the near-term operating outlook.",
+                    symbols=["SH.600000"],
+                    scope="local",
+                    is_confirmed=True,
+                    citation_title="Regulator enforcement notice",
+                    citation_url="https://example.com/regulator-enforcement-notice",
+                )
+            ]
+        }
+    )
+
+
+def broken_support_input() -> RecommendationInput:
+    confirmed = confirmed_bullish_input(holding=held_position())
+    return confirmed.model_copy(
+        update={
+            "technical": confirmed.technical.model_copy(
+                update={"latest_close": 11.0, "trend": Trend.DOWN}
+            )
+        }
+    )
+
+
+def neutral_watch_input() -> RecommendationInput:
+    confirmed = confirmed_bullish_input()
+    return confirmed.model_copy(
+        update={"technical": confirmed.technical.model_copy(update={"trend": Trend.NEUTRAL})}
+    )
+
+
 def evidence(
     title: str,
     direction: Direction,
@@ -105,6 +156,74 @@ def test_positive_confirmed_input_returns_three_horizon_recommendations() -> Non
     )
 
 
+def test_generated_recommendations_use_chinese_system_copy() -> None:
+    recommendation = RecommendationEngine().recommend(confirmed_bullish_input())[0]
+
+    assert recommendation.trigger.startswith("触发条件：")
+    assert recommendation.observation_or_target.startswith("观察结论：")
+    assert recommendation.invalidation.startswith("失效条件：")
+
+
+def assert_chinese_system_narratives(
+    analysis_input: RecommendationInput,
+    rationale_anchor: str,
+    expected_action: Action,
+    *,
+    has_holding: bool,
+) -> None:
+    recommendations = RecommendationEngine().recommend(analysis_input)
+    horizon_names = {
+        Horizon.SHORT: "短期",
+        Horizon.MEDIUM: "中期",
+        Horizon.LONG: "长期",
+    }
+
+    assert all(item.action is expected_action for item in recommendations)
+    for recommendation in recommendations:
+        assert any(rationale_anchor in item for item in recommendation.rationale)
+        assert recommendation.rationale[-1].startswith(
+            f"{horizon_names[recommendation.horizon]}：关注"
+        )
+        assert "触发条件：" in recommendation.trigger
+        assert "周期复核：" in recommendation.trigger
+        assert "观察结论：" in recommendation.observation_or_target
+        assert "周期关注：" in recommendation.observation_or_target
+        assert "失效条件：" in recommendation.invalidation
+        assert "周期重新评估：" in recommendation.invalidation
+        if has_holding:
+            assert recommendation.holding_impact is not None
+            assert recommendation.holding_impact.startswith("相对成本价的")
+        else:
+            assert recommendation.holding_impact is None
+
+
+@pytest.mark.parametrize(
+    ("analysis_input_factory", "rationale_anchor", "expected_action", "has_holding"),
+    [
+        (safety_downgrade_input, "安全降级：", Action.WATCH, True),
+        (confirmed_local_negative_event_input, "检测到下行条件：", Action.REDUCE, True),
+        (broken_support_input, "检测到下行条件：", Action.REDUCE, True),
+        (
+            lambda: confirmed_bullish_input(holding=held_position()),
+            "上升趋势且 RSI 低于 70",
+            Action.BUY_IN_TRANCHES,
+            True,
+        ),
+        (neutral_watch_input, "现有研究未满足所有已确认的看涨规则。", Action.WATCH, False),
+    ],
+    ids=["safety_downgrade", "local_negative_event", "broken_support", "bullish", "neutral_watch"],
+)
+def test_all_decision_paths_keep_chinese_system_narratives(
+    analysis_input_factory: Callable[[], RecommendationInput],
+    rationale_anchor: str,
+    expected_action: Action,
+    has_holding: bool,
+) -> None:
+    assert_chinese_system_narratives(
+        analysis_input_factory(), rationale_anchor, expected_action, has_holding=has_holding
+    )
+
+
 def test_low_credibility_or_conflicting_evidence_cannot_return_buy() -> None:
     recommendations = RecommendationEngine().recommend(conflicting_input())
 
@@ -125,8 +244,7 @@ def test_holding_return_is_informational_and_uses_latest_close() -> None:
     )
 
     assert all(
-        item.holding_impact == "Informational return versus cost basis: +20.00%."
-        for item in recommendations
+        item.holding_impact == "相对成本价的信息性收益：+20.00%。" for item in recommendations
     )
 
 
@@ -459,7 +577,7 @@ def test_break_below_named_support_recommends_reduce_or_avoid() -> None:
     recommendations = RecommendationEngine().recommend(analysis_input)
 
     assert all(item.action in {Action.REDUCE, Action.AVOID} for item in recommendations)
-    assert all("support 11.20" in item.trigger for item in recommendations)
+    assert all("支撑位 11.20" in item.trigger for item in recommendations)
 
 
 def test_recommendation_input_rejects_evidence_for_another_market_subject() -> None:

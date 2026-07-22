@@ -37,16 +37,16 @@ _RISK_PROFILE_LIMITS = {
 }
 _HORIZON_GUIDANCE = {
     Horizon.SHORT: {
-        "review": "the next one to five completed sessions",
-        "focus": "near-term completed-session confirmation",
+        "review": "未来一至五个已完成交易日",
+        "focus": "近期已完成交易日的确认信号",
     },
     Horizon.MEDIUM: {
-        "review": "the next several completed weeks",
-        "focus": "scheduled evidence updates and completed-session trends",
+        "review": "未来数个已完成交易周",
+        "focus": "按计划更新的证据与已完成交易日趋势",
     },
     Horizon.LONG: {
-        "review": "the next multi-quarter research cycle",
-        "focus": "fundamental, industry, and policy evidence over time",
+        "review": "未来跨多个季度的研究周期",
+        "focus": "随时间验证的基本面、行业和政策证据",
     },
 }
 
@@ -117,16 +117,16 @@ class RecommendationEngine:
         latest_close: float, volatility: float | None, decision_evidence: list[Evidence]
     ) -> str | None:
         if not isfinite(latest_close) or latest_close <= 0:
-            return "completed price data is unavailable"
+            return "已完成交易日的价格数据不可用"
         if volatility is not None and (not isfinite(volatility) or volatility >= _HIGH_VOLATILITY):
-            return "20-day realized volatility is high or unavailable"
+            return "20 日已实现波动率偏高或不可用"
         if len(decision_evidence) < 2:
-            return "fewer than two non-low-credibility local sources are available"
+            return "可用的非低可信度本地来源少于两项"
         directions = {
             item.direction for item in decision_evidence if item.direction is not Direction.NEUTRAL
         }
         if Direction.POSITIVE in directions and Direction.NEGATIVE in directions:
-            return "non-low-credibility local sources have conflicting directions"
+            return "非低可信度本地来源的方向相互冲突"
         return None
 
     @staticmethod
@@ -178,10 +178,10 @@ class RecommendationEngine:
             "action": Action.WATCH,
             "confidence": Confidence.LOW,
             "risk_level": RiskLevel.HIGH,
-            "rationale": [f"Safety downgrade: {reason}.", f"Monitor {condition}."],
-            "trigger": f"Trigger: verify {condition} before reconsidering the research-only view.",
+            "rationale": [f"安全降级：{reason}。", f"请持续关注{condition}。"],
+            "trigger": f"触发条件：在重新评估仅供研究参考的观点前，先核实{condition}。",
             "observation_or_target": self._observation(analysis_input, evidence),
-            "invalidation": f"Invalidation: {condition} remains unverified or materially changes.",
+            "invalidation": f"失效条件：{condition}仍未获核实或发生重大变化。",
             **self._citation_fields(evidence),
         }
 
@@ -189,18 +189,18 @@ class RecommendationEngine:
         self, analysis_input: RecommendationInput, event: EventSignal
     ) -> dict[str, object]:
         action = Action.REDUCE if analysis_input.stock.holding is not None else Action.AVOID
-        condition = f"the cited event '{event.citation_title}'"
+        condition = f"引用事件“{event.citation_title}”"
         return {
             "action": action,
             "confidence": Confidence.HIGH,
             "risk_level": RiskLevel.HIGH,
             "rationale": [
-                f"Downside condition detected: {condition} confirms '{event.title}'.",
+                f"检测到下行条件：{condition}确认了“{event.title}”。",
                 self._observation(analysis_input, []),
             ],
-            "trigger": f"Trigger: {condition} confirms '{event.title}'.",
+            "trigger": f"触发条件：{condition}确认了“{event.title}”。",
             "observation_or_target": self._observation(analysis_input, []),
-            "invalidation": f"Invalidation: {condition} is superseded by a cited corrective disclosure.",
+            "invalidation": f"失效条件：{condition}被有引用的更正披露取代。",
             "evidence_titles": [event.citation_title],
             "citation_urls": [event.citation_url],
         }
@@ -216,14 +216,14 @@ class RecommendationEngine:
             "confidence": Confidence.MEDIUM,
             "risk_level": RiskLevel.HIGH,
             "rationale": [
-                f"Downside condition detected: a close below named 20-day support {support:.2f}.",
-                f"The decisive local source is {condition}.",
+                f"检测到下行条件：收盘价跌破命名的 20 日支撑位 {support:.2f}。",
+                f"决定性本地来源为{condition}。",
             ],
-            "trigger": f"Trigger: a close below named 20-day support {support:.2f}, with {condition} monitored.",
+            "trigger": f"触发条件：收盘价跌破命名的 20 日支撑位 {support:.2f}，同时持续关注{condition}。",
             "observation_or_target": self._observation(analysis_input, evidence),
             "invalidation": (
-                f"Invalidation: a completed close back above named 20-day support {support:.2f} "
-                f"and {condition} remains valid."
+                f"失效条件：已完成交易日的收盘价重新站上命名的 20 日支撑位 {support:.2f}，"
+                f"且{condition}仍然有效。"
             ),
             **self._citation_fields(evidence),
         }
@@ -240,12 +240,12 @@ class RecommendationEngine:
             "confidence": Confidence.HIGH,
             "risk_level": self._risk_level(technical.realized_volatility_20),
             "rationale": [
-                f"Upward trend and RSI below 70 are supported by {condition}.",
-                f"Use {support_text} and {resistance_text} as conditional reference points.",
+                f"上升趋势且 RSI 低于 70，得到{condition}支持。",
+                f"将{support_text}和{resistance_text}作为条件性参考点。",
             ],
-            "trigger": f"Trigger: hold above {support_text} while {condition} remains valid.",
-            "observation_or_target": f"Observation: reassess only if price tests {resistance_text}.",
-            "invalidation": f"Invalidation: a completed close below {support_text} or a cited negative event.",
+            "trigger": f"触发条件：价格维持在{support_text}上方，且{condition}仍然有效。",
+            "observation_or_target": f"观察结论：仅在价格测试{resistance_text}时重新评估。",
+            "invalidation": f"失效条件：已完成交易日的收盘价跌破{support_text}，或出现有引用的负面事件。",
             **self._citation_fields(evidence),
         }
 
@@ -258,14 +258,14 @@ class RecommendationEngine:
             "confidence": Confidence.MEDIUM,
             "risk_level": self._risk_level(analysis_input.technical.realized_volatility_20),
             "rationale": [
-                "Available research does not meet every confirmed bullish rule.",
-                f"Monitor {condition}.",
+                "现有研究未满足所有已确认的看涨规则。",
+                f"请持续关注{condition}。",
             ],
-            "trigger": f"Trigger: confirm {condition} with trend and RSI evidence.",
+            "trigger": f"触发条件：以趋势和 RSI 证据确认{condition}。",
             "observation_or_target": self._observation(analysis_input, evidence),
             "invalidation": (
-                f"Invalidation: a completed close below {self._support_text(analysis_input, evidence)} "
-                "or a cited negative event."
+                f"失效条件：已完成交易日的收盘价跌破{self._support_text(analysis_input, evidence)}，"
+                "或出现有引用的负面事件。"
             ),
             **self._citation_fields(evidence),
         }
@@ -296,15 +296,13 @@ class RecommendationEngine:
             **decision,
             "rationale": [
                 *decision["rationale"],
-                f"{horizon.value.title()} horizon: review {guidance['focus']}.",
+                f"{RecommendationEngine._horizon_name(horizon)}：关注{guidance['focus']}。",
             ],
-            "trigger": f"{decision['trigger']} Horizon review: {guidance['review']}.",
+            "trigger": f"{decision['trigger']} 周期复核：{guidance['review']}。",
             "observation_or_target": (
-                f"{decision['observation_or_target']} Horizon focus: {guidance['focus']}."
+                f"{decision['observation_or_target']} 周期关注：{guidance['focus']}。"
             ),
-            "invalidation": (
-                f"{decision['invalidation']} Horizon reassessment: {guidance['review']}."
-            ),
+            "invalidation": (f"{decision['invalidation']} 周期重新评估：{guidance['review']}。"),
         }
 
     @staticmethod
@@ -316,12 +314,12 @@ class RecommendationEngine:
         percentage = ((latest_close - holding.cost_basis) / holding.cost_basis * 100).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
-        return f"Informational return versus cost basis: {percentage:+.2f}%."
+        return f"相对成本价的信息性收益：{percentage:+.2f}%。"
 
     def _support_text(self, analysis_input: RecommendationInput, evidence: list[Evidence]) -> str:
         support = analysis_input.technical.support_20
         return (
-            f"named 20-day support {support:.2f}"
+            f"命名的 20 日支撑位 {support:.2f}"
             if support is not None
             else self._named_condition(evidence)
         )
@@ -331,7 +329,7 @@ class RecommendationEngine:
     ) -> str:
         resistance = analysis_input.technical.resistance_20
         return (
-            f"named 20-day resistance {resistance:.2f}"
+            f"命名的 20 日阻力位 {resistance:.2f}"
             if resistance is not None
             else self._named_condition(evidence)
         )
@@ -339,8 +337,8 @@ class RecommendationEngine:
     def _observation(self, analysis_input: RecommendationInput, evidence: list[Evidence]) -> str:
         resistance = analysis_input.technical.resistance_20
         if resistance is not None:
-            return f"Observation: monitor named 20-day resistance {resistance:.2f}; this is not a price prediction."
-        return f"Observation: monitor {self._named_condition(evidence)}; this is not a price prediction."
+            return f"观察结论：关注命名的 20 日阻力位 {resistance:.2f}；这不是价格预测。"
+        return f"观察结论：关注{self._named_condition(evidence)}；这不是价格预测。"
 
     @staticmethod
     def _citation_fields(evidence: list[Evidence]) -> dict[str, object]:
@@ -352,5 +350,13 @@ class RecommendationEngine:
     @staticmethod
     def _named_condition(evidence: list[Evidence]) -> str:
         if evidence:
-            return f"the cited evidence '{evidence[0].title}'"
-        return "the documented local data condition"
+            return f"引用证据“{evidence[0].title}”"
+        return "已记录的本地数据条件"
+
+    @staticmethod
+    def _horizon_name(horizon: Horizon) -> str:
+        return {
+            Horizon.SHORT: "短期",
+            Horizon.MEDIUM: "中期",
+            Horizon.LONG: "长期",
+        }[horizon]

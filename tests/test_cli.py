@@ -190,11 +190,13 @@ def test_generate_uses_request_market_sessions_for_divergent_closed_markets(
     assert statuses["a_share"].data_as_of == date(2026, 7, 17)
     assert statuses["hong_kong"].status == "available"
     assert statuses["hong_kong"].data_as_of == date(2026, 7, 20)
-    rendered = [
+    json_report = (tmp_path / "reports" / "2026-07-21" / "report.json").read_text(encoding="utf-8")
+    rendered_reports = [
         (tmp_path / "reports" / "2026-07-21" / filename).read_text(encoding="utf-8")
-        for filename in ("report.json", "report.md", "report.html")
+        for filename in ("report.md", "report.html")
     ]
-    assert all("closed" in content for content in rendered)
+    assert "closed" in json_report
+    assert all("休市" in content for content in rendered_reports)
 
 
 def test_daily_request_rejects_duplicate_market_session_metadata() -> None:

@@ -80,39 +80,35 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
     assert payload["report_date"] == expected_payload["report_date"]
     assert payload["generated_at"] == expected_payload["generated_at"]
     assert payload["market_statuses"][0]["data_as_of"] == date_contract["market"]
+    assert payload["market_statuses"][0]["market"] == market_status.market.value
+    assert payload["market_statuses"][0]["status"] == market_status.status
     assert analysis_payload["research"]["data_as_of"] == date_contract["research"]
     assert analysis_payload["previous_day"]["data_as_of"] == date_contract["previous_day"]
     assert analysis_payload["technical"]["data_as_of"] == date_contract["technical"]
 
     assert f"# 每日股票研究报告 — {date_contract['report']}" in markdown
     assert f"- 生成时间：{report.generated_at.isoformat()}" in markdown
-    assert (
-        f"- {market_status.market.value}: {market_status.status}; {date_contract['market']};"
-        in markdown
-    )
+    assert f"- A股：可用；数据截至：{date_contract['market']}；" in markdown
     assert f"- 研究数据截至：{date_contract['research']}" in markdown
     previous_markdown = _between(markdown, "## 前日表现与原因", "## 基本面分析")
     assert f"数据截至 {date_contract['previous_day']}，收盘" in previous_markdown
     technical_markdown = _between(markdown, "## 技术面分析", "## 政策分析")
     assert f"数据截至 {date_contract['technical']}，收盘" in technical_markdown
 
-    assert f"<dt>report_date</dt><dd>{date_contract['report']}</dd>" in html
-    assert f"<dt>generated_at</dt><dd>{report.generated_at.isoformat()}</dd>" in html
+    assert f"<dt>报告日期</dt><dd>{date_contract['report']}</dd>" in html
+    assert f"<dt>生成时间</dt><dd>{report.generated_at.isoformat()}</dd>" in html
     market_html = _between(html, "<section><h2>市场状态</h2>", "<section><h2>全局风险</h2>")
-    assert (
-        f"<strong>{market_status.market.value}</strong> · {market_status.status} · "
-        f"{date_contract['market']} ·" in market_html
-    )
+    assert f"<strong>A股</strong> · 可用 · {date_contract['market']} ·" in market_html
     research_html = _between(html, "<section><h2>消息面分析</h2>", "<section><h2>突发事件</h2>")
     assert f"<strong>研究数据截至：</strong>{date_contract['research']}" in research_html
     previous_html = _between(
         html, "<section><h2>前日表现与原因</h2>", "<section><h2>基本面分析</h2>"
     )
-    assert f"<dt>data_as_of</dt><dd>{date_contract['previous_day']}</dd>" in previous_html
+    assert f"<dt>数据截至</dt><dd>{date_contract['previous_day']}</dd>" in previous_html
     technical_html = _between(html, "<section><h2>技术面分析</h2>", "<section><h2>政策分析</h2>")
-    assert f"<dt>data_as_of</dt><dd>{date_contract['technical']}</dd>" in technical_html
+    assert f"<dt>数据截至</dt><dd>{date_contract['technical']}</dd>" in technical_html
 
-    shared_facts = (
+    json_facts = (
         analysis.stock.symbol,
         analysis.stock.name,
         market_status.market.value,
@@ -120,10 +116,24 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
         report.run_warnings[0],
         analysis.data_gaps[0],
         report.disclaimer,
+        analysis.research.evidence[0].title,
         source_url,
     )
-    for content in (json_report, markdown, html):
-        assert all(fact in content for fact in shared_facts)
+    assert all(fact in json_report for fact in json_facts)
+
+    rendered_facts = (
+        analysis.stock.symbol,
+        analysis.stock.name,
+        "A股",
+        "可用",
+        report.run_warnings[0],
+        analysis.data_gaps[0],
+        report.disclaimer,
+        analysis.research.evidence[0].title,
+        source_url,
+    )
+    for content in (markdown, html):
+        assert all(fact in content for fact in rendered_facts)
 
     section_contracts = (
         ("previous_day", "前日表现与原因"),

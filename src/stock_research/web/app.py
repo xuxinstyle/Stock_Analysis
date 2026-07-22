@@ -110,6 +110,8 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
     templates.env.globals.update(
         recommendation_for=ReportStore._recommendation_for,
         structured_fields=ReportStore._structured_fields,
+        display_field=ReportStore._display_field,
+        display_value=ReportStore._display_value,
     )
     app.include_router(_dashboard_router(app.state.services, templates))
     app.include_router(_report_router(app.state.services, templates))

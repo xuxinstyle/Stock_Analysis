@@ -14,6 +14,7 @@ from stock_research.domain.enums import (
     RunStatus,
 )
 from stock_research.domain.models import (
+    DATA_GAP_RATIONALE_PREFIX,
     DailyReport,
     DailyRunRequest,
     MarketStatus,
@@ -56,27 +57,31 @@ class ReportBuilder:
         for stock in stocks:
             matching = research_by_symbol.get(stock.symbol, [])
             if len(matching) != 1:
-                gap = (
-                    f"{stock.symbol}: expected exactly one research input; "
-                    f"received {len(matching)}."
-                )
+                gap = f"{stock.symbol}：应且仅应提供一份研究输入，实际收到 {len(matching)} 份。"
                 warnings.append(gap)
                 analyses.append(self._gap_analysis(stock, gap))
                 continue
 
             research = matching[0]
             if not research.evidence:
-                gap = f"{stock.symbol}: research input has zero cited sources; data gap retained."
+                gap = f"{stock.symbol}：研究输入未包含已引用来源，已保留数据缺口。"
                 warnings.append(gap)
                 analysis = self._build_zero_source(stock, research, market_data, gap, request)
                 analyses.append(analysis)
                 warnings.extend(item for item in analysis.data_gaps if item != gap)
                 continue
 
+            completed_session = self._expected_session(request, stock.market)
+            if completed_session is None:
+                gap = f"{stock.symbol}：无法确定 {request.report_date} 的已完成交易日状态。"
+                warnings.append(gap)
+                analyses.append(self._gap_analysis(stock, gap, research=research))
+                continue
+
             try:
-                bars = market_data.fetch_daily_bars(stock, request.report_date)
-            except MarketDataUnavailable as error:
-                gap = f"{stock.symbol}: price data unavailable ({error})."
+                bars = market_data.fetch_daily_bars(stock, completed_session)
+            except MarketDataUnavailable:
+                gap = self._market_data_gap(stock)
                 warnings.append(gap)
                 analyses.append(self._gap_analysis(stock, gap, research=research))
                 continue
@@ -93,7 +98,7 @@ class ReportBuilder:
                     StockAnalysis(
                         stock=stock,
                         previous_day=self._previous_day(
-                            bars, f"No causal attribution: {chronology_gap}"
+                            bars, f"前日表现不作归因：{chronology_gap}"
                         ),
                         technical=technical,
                         research=research,
@@ -149,10 +154,17 @@ class ReportBuilder:
         gap: str,
         request: DailyRunRequest,
     ) -> StockAnalysis:
+        completed_session = self._expected_session(request, stock.market)
+        if completed_session is None:
+            return self._gap_analysis(
+                stock,
+                f"{stock.symbol}：无法确定 {request.report_date} 的已完成交易日状态。",
+                research=research,
+            )
         try:
-            bars = market_data.fetch_daily_bars(stock, request.report_date)
-        except MarketDataUnavailable as error:
-            combined_gap = f"{gap} Price data unavailable ({error})."
+            bars = market_data.fetch_daily_bars(stock, completed_session)
+        except MarketDataUnavailable:
+            combined_gap = f"{gap} {self._market_data_gap(stock)}"
             return self._gap_analysis(stock, combined_gap, research=research)
         technical = calculate_technical_snapshot(bars)
         chronology_gap = self._chronology_gap(
@@ -162,7 +174,7 @@ class ReportBuilder:
         reason = research.news_summary
         if chronology_gap is not None:
             gaps.append(chronology_gap)
-            reason = f"No causal attribution: {chronology_gap}"
+            reason = f"前日表现不作归因：{chronology_gap}"
         return StockAnalysis(
             stock=stock,
             previous_day=self._previous_day(bars, reason),
@@ -194,16 +206,20 @@ class ReportBuilder:
                 action=Action.WATCH,
                 confidence=Confidence.LOW,
                 risk_level=RiskLevel.HIGH,
-                rationale=[f"Data-gap fallback: {gap}"],
-                trigger="Trigger: obtain and validate the missing local data before reassessment.",
-                observation_or_target="Observation only: no price target is produced for incomplete data.",
-                invalidation="Invalidation: the missing data remains unavailable or cannot be verified.",
+                rationale=[f"{DATA_GAP_RATIONALE_PREFIX}{gap}"],
+                trigger="触发条件：补齐并核验缺失的本地数据后再评估。",
+                observation_or_target="仅观察：数据不完整时不提供价格目标。",
+                invalidation="失效条件：缺失数据仍不可获得或无法核验。",
                 position_limit="≤0%",
                 evidence_titles=[],
                 citation_urls=[],
             )
             for horizon in (Horizon.SHORT, Horizon.MEDIUM, Horizon.LONG)
         ]
+
+    @staticmethod
+    def _market_data_gap(stock: StockConfig) -> str:
+        return f"{stock.symbol}：未能取得完整的日行情数据，已暂缓技术分析。"
 
     @staticmethod
     def _previous_day(bars: pd.DataFrame, reason: str) -> PreviousDayPerformance:
@@ -240,16 +256,16 @@ class ReportBuilder:
     ) -> str | None:
         expected_date = self._expected_session(request, stock.market)
         if expected_date is None:
-            return f"{stock.symbol}: completed-session status is unavailable for {request.report_date}."
+            return f"{stock.symbol}：无法确定 {request.report_date} 的已完成交易日状态。"
         if technical_date != research_date:
             return (
-                f"{stock.symbol}: date mismatch; technical date {technical_date} does not equal "
-                f"research date {research_date}; expected completed session {expected_date}."
+                f"{stock.symbol}：数据日期不一致；技术数据日期 {technical_date} 与研究数据日期 "
+                f"{research_date} 不一致，应为已完成交易日 {expected_date}。"
             )
         if technical_date != expected_date:
             return (
-                f"{stock.symbol}: stale data; technical and research dates are {technical_date}; "
-                f"expected completed session {expected_date} before report date {request.report_date}."
+                f"{stock.symbol}：数据已过期；技术与研究数据日期均为 {technical_date}，"
+                f"应使用报告日 {request.report_date} 前的已完成交易日 {expected_date}。"
             )
         return None
 
@@ -296,18 +312,18 @@ class ReportBuilder:
             if metadata is not None and metadata.is_closed and len(available) == len(symbols):
                 state = "closed"
                 message = (
-                    f"Market was closed on report date {request.report_date}; prior completed session "
-                    "data is current for all configured stocks."
+                    f"报告日 {request.report_date} 市场休市；所有已配置股票均使用前一已完成"
+                    "交易日的最新数据。"
                 )
             elif len(available) == len(symbols):
                 state = "available"
-                message = "Completed session data is current for all configured stocks."
+                message = "所有已配置股票的已完成交易日数据均为最新。"
             elif available:
                 state = "partial"
-                message = "Completed session data is current for only part of this market."
+                message = "仅部分已配置股票的已完成交易日数据为最新。"
             else:
                 state = "unavailable"
-                message = "Completed session data is unavailable or stale for configured stocks."
+                message = "已配置股票的已完成交易日数据不可用或已过期。"
             dates = [analysis.technical.data_as_of for analysis in observed if analysis.technical]
             statuses.append(
                 MarketStatus(

@@ -21,6 +21,10 @@ from stock_research.domain.enums import (
 )
 
 
+DATA_GAP_RATIONALE_PREFIX = "数据缺口："
+LEGACY_DATA_GAP_RATIONALE_PREFIX = "Data-gap fallback: "
+
+
 class Holding(BaseModel):
     quantity: Decimal = Field(gt=0)
     cost_basis: Decimal = Field(gt=0)
@@ -273,7 +277,11 @@ class StockAnalysis(BaseModel):
                 raise ValueError(
                     "uncited data-gap recommendations must be WATCH with LOW confidence and HIGH risk"
                 )
-            canonical_rationales = {f"Data-gap fallback: {gap}" for gap in self.data_gaps}
+            canonical_rationales = {
+                f"{prefix}{gap}"
+                for prefix in (DATA_GAP_RATIONALE_PREFIX, LEGACY_DATA_GAP_RATIONALE_PREFIX)
+                for gap in self.data_gaps
+            }
             if not any(reason in canonical_rationales for reason in recommendation.rationale):
                 raise ValueError(
                     "uncited fallbacks require explicit data-gap rationale that must match "
@@ -290,10 +298,7 @@ class DailyReport(BaseModel):
     global_risks: list[str] = Field(default_factory=list)
     run_warnings: list[str] = Field(default_factory=list)
     analyses: list[StockAnalysis]
-    disclaimer: str = (
-        "Research-only report; not personalized investment advice, a return guarantee, "
-        "or an instruction to trade."
-    )
+    disclaimer: str = "本报告仅供研究参考，不构成个性化投资建议、收益保证或交易指令。"
 
 
 class RunRecord(BaseModel):

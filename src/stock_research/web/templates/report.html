@@ -22,14 +22,14 @@
     <p class="eyebrow">完整研究记录</p>
     <h1>每日股票研究报告 · {{ report.report_date }}</h1>
     <dl>
-      <dt>report_date</dt><dd>{{ report.report_date }}</dd>
-      <dt>generated_at</dt><dd>{{ report.generated_at.isoformat() }}</dd>
-      <dt>run_status</dt><dd>{{ report.run_status.value }}</dd>
+      <dt>{{ display_field("report_date") }}</dt><dd>{{ report.report_date }}</dd>
+      <dt>{{ display_field("generated_at") }}</dt><dd>{{ report.generated_at.isoformat() }}</dd>
+      <dt>{{ display_field("run_status") }}</dt><dd>{{ display_value(report.run_status.value) }}</dd>
     </dl>
     <div class="notice research-notice"><strong>仅供研究使用</strong><span>{{ report.disclaimer }}</span></div>
   </header>
 
-  <section><h2>市场状态</h2><ul class="fact-list">{% for item in report.market_statuses %}<li><strong>{{ item.market.value }}</strong> · {{ item.status }} · {{ item.data_as_of or "无可用日期" }} · {{ item.message }}<dl>{% for name, value in structured_fields(item) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>暂无市场状态。</li>{% endfor %}</ul></section>
+  <section><h2>市场状态</h2><ul class="fact-list">{% for item in report.market_statuses %}<li><strong>{{ display_value(item.market.value) }}</strong> · {{ display_value(item.status) }} · {{ display_value(item.data_as_of) }} · {{ item.message }}<dl>{% for name, value in structured_fields(item) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>暂无市场状态。</li>{% endfor %}</ul></section>
   <section><h2>全局风险</h2><ul class="fact-list">{% for risk in report.global_risks %}<li>{{ risk }}</li>{% else %}<li>暂无已记录的全局风险。</li>{% endfor %}</ul></section>
   <section><h2>运行警告</h2><ul class="fact-list">{% for warning in report.run_warnings %}<li>{{ warning }}</li>{% else %}<li>无运行警告。</li>{% endfor %}</ul></section>
 

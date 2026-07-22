@@ -12,8 +12,145 @@ from pydantic import BaseModel
 
 from stock_research.db import create_engine_at
 from stock_research.domain.enums import Horizon
-from stock_research.domain.models import DailyReport, Recommendation, StockAnalysis
+from stock_research.domain.models import (
+    DATA_GAP_RATIONALE_PREFIX,
+    LEGACY_DATA_GAP_RATIONALE_PREFIX,
+    DailyReport,
+    Recommendation,
+    StockAnalysis,
+)
 from stock_research.repositories.reports import ReportRepository
+
+
+_FIELD_LABELS = {
+    "report_date": "报告日期",
+    "generated_at": "生成时间",
+    "run_status": "运行状态",
+    "market_statuses": "市场状态",
+    "global_risks": "全局风险",
+    "run_warnings": "运行警告",
+    "analyses": "个股分析",
+    "disclaimer": "免责声明",
+    "symbol": "股票代码",
+    "name": "股票名称",
+    "market": "市场",
+    "industry": "所属行业",
+    "holding": "持仓",
+    "quantity": "持仓数量",
+    "cost_basis": "持仓成本",
+    "cash_available": "可用资金",
+    "risk_profile": "风险偏好",
+    "data_as_of": "数据截至",
+    "latest_close": "最新收盘价",
+    "sma_5": "5 日均线",
+    "sma_20": "20 日均线",
+    "sma_60": "60 日均线",
+    "rsi_14": "RSI(14)",
+    "macd": "MACD",
+    "macd_signal": "MACD 信号线",
+    "macd_histogram": "MACD 柱状图",
+    "bollinger_lower": "布林带下轨",
+    "bollinger_middle": "布林带中轨",
+    "bollinger_upper": "布林带上轨",
+    "realized_volatility_20": "20 日已实现波动率",
+    "volume_ratio": "量比",
+    "volume_ratio_20": "20 日量比",
+    "trend": "趋势",
+    "support": "支撑位",
+    "resistance": "阻力位",
+    "support_20": "20 日支撑位",
+    "resistance_20": "20 日阻力位",
+    "title": "标题",
+    "occurred_at": "发生时间",
+    "direction": "方向",
+    "summary": "摘要",
+    "symbols": "关联股票",
+    "scope": "事件范围",
+    "is_confirmed": "已确认",
+    "citation_title": "引用标题",
+    "citation_url": "引用链接",
+    "url": "链接",
+    "source_name": "来源名称",
+    "published_at": "发布时间",
+    "retrieved_at": "获取时间",
+    "category": "证据类型",
+    "credibility": "可信度",
+    "horizon": "建议周期",
+    "action": "操作",
+    "confidence": "置信度",
+    "risk_level": "风险等级",
+    "rationale": "依据",
+    "trigger": "触发条件",
+    "observation_or_target": "观察/目标",
+    "invalidation": "失效条件",
+    "position_limit": "仓位上限",
+    "holding_impact": "持仓影响",
+    "evidence_titles": "依据标题",
+    "citation_urls": "引用链接",
+    "close": "收盘价",
+    "previous_close": "前收盘价",
+    "change": "涨跌额",
+    "change_percent": "涨跌幅",
+    "volume": "成交量",
+    "previous_volume": "前一日成交量",
+    "volume_change_percent": "成交量变化",
+    "reason": "归因说明",
+    "status": "状态",
+    "message": "说明",
+    "fundamental_summary": "基本面摘要",
+    "industry_summary": "行业摘要",
+    "policy_summary": "政策摘要",
+    "news_summary": "消息摘要",
+    "international_summary": "国际传导摘要",
+    "product_price_summary": "产品价格摘要",
+    "events": "突发事件",
+    "evidence": "证据",
+}
+
+_DISPLAY_VALUES = {
+    "a_share": "A股",
+    "beijing": "北交所",
+    "hong_kong": "港股",
+    "up": "上行",
+    "down": "下行",
+    "neutral": "中性",
+    "short": "短线",
+    "long": "长线",
+    "watch": "观望",
+    "buy_in_tranches": "分批买入",
+    "hold": "持有",
+    "reduce": "减持",
+    "avoid": "回避",
+    "low": "低",
+    "high": "高",
+    "success": "成功",
+    "partial": "部分完成",
+    "failed": "失败",
+    "positive": "利好",
+    "negative": "利空",
+    "local": "本地",
+    "international": "国际",
+    "company": "公司",
+    "industry": "行业",
+    "policy": "政策",
+    "news": "新闻",
+    "product_price": "产品价格",
+    "available": "可用",
+    "closed": "休市",
+    "unavailable": "不可用",
+    "conservative": "保守型",
+    "balanced": "均衡型",
+    "aggressive": "进取型",
+    "1": "低",
+    "2": "二级",
+    "3": "一级",
+}
+
+_FIELD_DISPLAY_VALUES = {
+    "horizon": {"medium": "中线"},
+    "risk_level": {"medium": "中等"},
+    "confidence": {"medium": "中等"},
+}
 
 
 @dataclass(frozen=True)
@@ -105,6 +242,8 @@ class ReportStore:
             report=report,
             recommendation_for=self._recommendation_for,
             structured_fields=self._structured_fields,
+            display_field=self._display_field,
+            display_value=self._display_value,
             standalone=True,
         )
 
@@ -113,17 +252,18 @@ class ReportStore:
         lines = [
             f"# 每日股票研究报告 — {report.report_date.isoformat()}",
             "",
-            f"- 生成时间：{report.generated_at.isoformat()}",
-            f"- 运行状态：{report.run_status.value}",
-            f"- 免责声明：{report.disclaimer}",
+            f"- {ReportStore._display_field('generated_at')}：{report.generated_at.isoformat()}",
+            f"- {ReportStore._display_field('run_status')}：{ReportStore._display_value(report.run_status.value)}",
+            f"- {ReportStore._display_field('disclaimer')}：{report.disclaimer}",
             "",
             "## 市场状态",
         ]
         if report.market_statuses:
             for status in report.market_statuses:
-                data_as_of = status.data_as_of.isoformat() if status.data_as_of else "无可用日期"
+                data_as_of = ReportStore._display_value(status.data_as_of)
                 lines.append(
-                    f"- {status.market.value}: {status.status}; {data_as_of}; {status.message}"
+                    f"- {ReportStore._display_value(status.market.value)}：{ReportStore._display_value(status.status)}；"
+                    f"{ReportStore._display_field('data_as_of')}：{data_as_of}；{status.message}"
                 )
         else:
             lines.append("- 无已配置市场。")
@@ -184,7 +324,7 @@ class ReportStore:
             "## 技术面分析",
             (
                 f"数据截至 {technical.data_as_of.isoformat()}，收盘 {technical.latest_close:.4f}，"
-                f"趋势 {technical.trend.value}，RSI(14) {technical.rsi_14}."
+                f"趋势 {ReportStore._display_value(technical.trend.value)}，RSI(14) {technical.rsi_14}。"
                 if technical
                 else "数据缺口：技术指标不可用。"
             ),
@@ -208,7 +348,7 @@ class ReportStore:
                 if event.citation_title and event.citation_url:
                     lines.append(f"  - 事件来源：[{event.citation_title}]({event.citation_url})")
                 lines.extend(
-                    f"  - {name}: {value}" for name, value in ReportStore._structured_fields(event)
+                    f"  - {name}：{value}" for name, value in ReportStore._structured_fields(event)
                 )
         else:
             lines.append("- 无已提供的可验证突发事件。")
@@ -222,13 +362,17 @@ class ReportStore:
             if recommendation:
                 lines.extend(
                     [
-                        f"- 动作：{recommendation.action.value}",
-                        f"- 风险/信心：{recommendation.risk_level.value}/{recommendation.confidence.value}",
-                        f"- 依据：{' '.join(recommendation.rationale)}",
+                        f"- {ReportStore._display_field('action')}："
+                        f"{ReportStore._display_value(recommendation.action.value)}",
+                        f"- {ReportStore._display_field('risk_level')}/"
+                        f"{ReportStore._display_field('confidence')}："
+                        f"{ReportStore._display_value(recommendation.risk_level.value, 'risk_level')}/"
+                        f"{ReportStore._display_value(recommendation.confidence.value, 'confidence')}",
+                        f"- 依据：{ReportStore._display_value(recommendation.rationale, 'rationale')}",
                         f"- {recommendation.trigger}",
                         f"- {recommendation.observation_or_target}",
                         f"- {recommendation.invalidation}",
-                        f"- 仓位上限：{recommendation.position_limit}",
+                        f"- {ReportStore._display_field('position_limit')}：{recommendation.position_limit}",
                     ]
                 )
                 if recommendation.holding_impact:
@@ -239,11 +383,12 @@ class ReportStore:
         if research and research.evidence:
             for evidence in research.evidence:
                 lines.append(
-                    f"- [{evidence.title}]({evidence.url}) — {evidence.source_name}; "
-                    f"可信度 {evidence.credibility.value}"
+                    f"- [{evidence.title}]({evidence.url}) — {evidence.source_name}；"
+                    f"{ReportStore._display_field('credibility')} "
+                    f"{ReportStore._display_value(evidence.credibility.value)}"
                 )
                 lines.extend(
-                    f"  - {name}: {value}"
+                    f"  - {name}：{value}"
                     for name, value in ReportStore._structured_fields(evidence)
                 )
         else:
@@ -262,25 +407,37 @@ class ReportStore:
     def _markdown_structured_fields(model: BaseModel | None) -> list[str]:
         if model is None:
             return []
-        return [f"- {name}: {value}" for name, value in ReportStore._structured_fields(model)]
+        return [f"- {name}：{value}" for name, value in ReportStore._structured_fields(model)]
 
     @staticmethod
     def _structured_fields(model: BaseModel) -> list[tuple[str, str]]:
         return [
-            (name, ReportStore._display_value(value))
+            (ReportStore._display_field(name), ReportStore._display_value(value, name))
             for name, value in model.model_dump(mode="json").items()
         ]
 
     @staticmethod
-    def _display_value(value: object) -> str:
+    def _display_field(name: str) -> str:
+        return _FIELD_LABELS.get(name, name)
+
+    @staticmethod
+    def _display_value(value: object, field_name: str | None = None) -> str:
         if value is None:
-            return "null"
+            return "无"
         if isinstance(value, bool):
-            return str(value).lower()
+            return "是" if value else "否"
         if isinstance(value, list):
-            return ", ".join(ReportStore._display_value(item) for item in value)
+            return ", ".join(ReportStore._display_value(item, field_name) for item in value)
         if isinstance(value, dict):
             return ", ".join(
-                f"{key}={ReportStore._display_value(item)}" for key, item in sorted(value.items())
+                f"{ReportStore._display_field(str(key))}={ReportStore._display_value(item, str(key))}"
+                for key, item in sorted(value.items())
             )
-        return str(value)
+        if field_name == "rationale" and isinstance(value, str):
+            if value.startswith(LEGACY_DATA_GAP_RATIONALE_PREFIX):
+                return f"{DATA_GAP_RATIONALE_PREFIX}{value.removeprefix(LEGACY_DATA_GAP_RATIONALE_PREFIX)}"
+        if field_name is not None:
+            contextual_display = _FIELD_DISPLAY_VALUES.get(field_name, {}).get(str(value))
+            if contextual_display is not None:
+                return contextual_display
+        return _DISPLAY_VALUES.get(str(value), str(value))

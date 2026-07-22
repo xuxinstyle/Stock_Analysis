@@ -10,7 +10,16 @@ place trades.
 - Never place orders, connect to brokers, or execute trades.
 - Never assert return certainty or write an uncited material claim.
 - Record data gaps rather than inventing information.
+- 所有自动生成的研究摘要、事件说明和数据缺口解释必须使用简体中文；外文原始来源标题可作为引用元数据保留。
 - Do not use or request API keys, credentials, or an operating-system scheduler.
+- The local application retrieves completed A-share daily history through Tencent via AkShare and
+  BSE daily K lines through public, data-only OpenTDX retrieval. These paths require no key,
+  account, broker connection, trade, or order; Hong Kong retrieval is unchanged. A provider may
+  return a same-day intraday bar, so rely only on the completed-session filtering performed by the
+  local application.
+- If daily-bar retrieval fails or lacks completed-session coverage, retain a concise, source-neutral
+  data gap and a partial report. Do not copy a hostname, URL, proxy detail, or raw network error
+  into the research input, report, or local-run note.
 - Research only the active configured A-share, Beijing Stock Exchange (BSE), and Hong Kong subjects. Query the SQLite-backed persisted active stock list, not a YAML configuration file.
 - The existing local application-service invocation below reads the same app home and repository used by `DailyRunService` and emits active symbol, name, market, industry, and optional holding-risk context:
 

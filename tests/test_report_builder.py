@@ -15,6 +15,7 @@ from stock_research.domain.enums import (
 from stock_research.domain.models import (
     DailyRunRequest,
     Evidence,
+    MarketSession,
     Recommendation,
     StockAnalysis,
     StockConfig,
@@ -96,15 +97,27 @@ class FakeMarketData:
         *,
         bars_end: date = date(2026, 7, 20),
         bars_ends: dict[str, date] | None = None,
+        message: str = "fixture market outage",
     ) -> None:
         self.unavailable = unavailable or set()
         self.bars_end = bars_end
         self.bars_ends = bars_ends or {}
+        self.message = message
 
     def fetch_daily_bars(self, stock: StockConfig, end: date, days: int = 260) -> pd.DataFrame:
         if stock.symbol in self.unavailable:
-            raise MarketDataUnavailable(stock.symbol, "fixture market outage")
+            raise MarketDataUnavailable(stock.symbol, self.message)
         return make_bars(self.bars_ends.get(stock.symbol, self.bars_end))
+
+
+class RecordingMarketData(FakeMarketData):
+    def __init__(self) -> None:
+        super().__init__()
+        self.requested_ends: list[date] = []
+
+    def fetch_daily_bars(self, stock: StockConfig, end: date, days: int = 260) -> pd.DataFrame:
+        self.requested_ends.append(end)
+        return super().fetch_daily_bars(stock, end, days)
 
 
 class FixtureSessionCalendar:
@@ -147,7 +160,7 @@ def test_zero_source_research_is_a_labelled_partial_without_fabricated_citations
     assert report.run_status is RunStatus.PARTIAL
     assert report.analyses[0].research is not None
     assert report.analyses[0].data_gaps
-    assert "zero cited sources" in report.analyses[0].data_gaps[0]
+    assert "未包含已引用来源" in report.analyses[0].data_gaps[0]
     assert all(item.action is Action.WATCH for item in report.analyses[0].recommendations)
     assert all(not item.citation_urls for item in report.analyses[0].recommendations)
     assert all(not item.evidence_titles for item in report.analyses[0].recommendations)
@@ -168,9 +181,57 @@ def test_market_failure_keeps_stock_in_partial_report() -> None:
     failed = report.analyses[1]
     assert failed.stock.symbol == "HK.00700"
     assert failed.previous_day is None and failed.technical is None
-    assert failed.data_gaps and "fixture market outage" in failed.data_gaps[0]
+    assert failed.data_gaps and "未能取得完整的日行情数据，已暂缓技术分析。" in failed.data_gaps[0]
+    assert "fixture market outage" not in failed.data_gaps[0]
     assert all(item.action is Action.WATCH for item in failed.recommendations)
     assert any("HK.00700" in warning for warning in report.run_warnings)
+
+
+def test_market_failure_uses_concise_public_data_gap() -> None:
+    stock = make_stock()
+    raw_error = "HTTPSConnectionPool(host='private.example'): proxy URL https://private.example/x"
+
+    report = ReportBuilder().build(
+        make_request(make_research()),
+        [stock],
+        FakeMarketData({stock.symbol}, message=raw_error),
+    )
+
+    analysis = report.analyses[0]
+    public_text = [*analysis.data_gaps, *report.run_warnings]
+    public_text.extend(
+        rationale for item in analysis.recommendations for rationale in item.rationale
+    )
+    rendered_text = " ".join(public_text)
+
+    assert report.run_status is RunStatus.PARTIAL
+    assert "日行情数据" in analysis.data_gaps[0]
+    assert "private.example" not in rendered_text
+    assert "HTTPSConnectionPool" not in rendered_text
+    assert "proxy" not in rendered_text
+    assert all(item.action is Action.WATCH for item in analysis.recommendations)
+    assert all(item.confidence.value == "low" for item in analysis.recommendations)
+    assert all(item.risk_level.value == "high" for item in analysis.recommendations)
+
+
+def test_builder_fetches_prices_to_declared_completed_session() -> None:
+    stock = make_stock()
+    request = make_request(make_research()).model_copy(
+        update={
+            "market_sessions": [
+                MarketSession(
+                    market=Market.A_SHARE,
+                    completed_session=date(2026, 7, 20),
+                    is_closed=False,
+                )
+            ]
+        }
+    )
+    market_data = RecordingMarketData()
+
+    ReportBuilder().build(request, [stock], market_data)
+
+    assert market_data.requested_ends == [date(2026, 7, 20)]
 
 
 def test_missing_research_input_keeps_stock_as_data_gap() -> None:
@@ -180,7 +241,7 @@ def test_missing_research_input_keeps_stock_as_data_gap() -> None:
 
     assert report.run_status is RunStatus.PARTIAL
     assert report.analyses[0].research is None
-    assert "exactly one research input" in report.analyses[0].data_gaps[0]
+    assert "应且仅应提供一份研究输入" in report.analyses[0].data_gaps[0]
     assert all(item.action is Action.WATCH for item in report.analyses[0].recommendations)
 
 
@@ -194,9 +255,10 @@ def test_zero_source_and_market_failure_labels_both_data_gaps() -> None:
     )
 
     gaps = " ".join(report.analyses[0].data_gaps)
-    assert "zero cited sources" in gaps
-    assert "fixture market outage" in gaps
-    assert any("fixture market outage" in warning for warning in report.run_warnings)
+    assert "未包含已引用来源" in gaps
+    assert "未能取得完整的日行情数据，已暂缓技术分析。" in gaps
+    assert "fixture market outage" not in gaps
+    assert all("fixture market outage" not in warning for warning in report.run_warnings)
 
 
 def test_stale_research_date_uses_partial_uncited_watch_without_news_attribution() -> None:
@@ -207,7 +269,7 @@ def test_stale_research_date_uses_partial_uncited_watch_without_news_attribution
 
     analysis = report.analyses[0]
     assert report.run_status is RunStatus.PARTIAL
-    assert any("date mismatch" in gap for gap in analysis.data_gaps)
+    assert any("数据日期不一致" in gap for gap in analysis.data_gaps)
     assert analysis.previous_day is not None
     assert stale.news_summary not in analysis.previous_day.reason
     assert all(item.action is Action.WATCH for item in analysis.recommendations)
@@ -254,7 +316,7 @@ def test_jointly_stale_technical_and_research_dates_are_partial() -> None:
     )
 
     assert report.run_status is RunStatus.PARTIAL
-    assert "expected completed session 2026-07-20" in report.analyses[0].data_gaps[0]
+    assert "已完成交易日 2026-07-20" in report.analyses[0].data_gaps[0]
     assert all(item.action is Action.WATCH for item in report.analyses[0].recommendations)
 
 
@@ -305,7 +367,7 @@ def test_market_status_uses_market_specific_completed_sessions_and_keeps_stale_d
     assert statuses[Market.A_SHARE].data_as_of == date(2026, 7, 17)
     assert statuses[Market.HONG_KONG].status == "unavailable"
     assert statuses[Market.HONG_KONG].data_as_of == date(2026, 7, 17)
-    assert "expected completed session 2026-07-20" in report.analyses[1].data_gaps[0]
+    assert "已完成交易日 2026-07-20" in report.analyses[1].data_gaps[0]
 
 
 def test_market_status_includes_beijing_as_a_distinct_market() -> None:

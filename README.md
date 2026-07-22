@@ -113,6 +113,19 @@ stock-research serve --port 8000
 
 There are no buy, sell, order, broker, or credential commands.
 
+## Market-data provenance and gaps
+
+For completed Shanghai and Shenzhen daily bars, the application uses Tencent A-share history
+through AkShare. Beijing Stock Exchange daily K lines use the public data-only OpenTDX client.
+Neither path requires an API key, account, broker connection, order, or trade operation; OpenTDX
+is limited to its public daily-bar retrieval interface. Hong Kong history remains on the existing
+provider path.
+
+A public source can include a same-day intraday bar. The application filters every result to the
+declared completed session before technical analysis. If a provider fails or its completed history
+is insufficient, the report stays `partial` and shows a concise, source-neutral data gap. It does
+not expose a hostname, URL, proxy detail, or raw network exception in report prose.
+
 ## Outputs and interpretation
 
 Each run is saved below `<app-home>/reports/YYYY-MM-DD/` as `report.json`, `report.md`, and

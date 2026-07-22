@@ -70,6 +70,7 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
         "Never assert return certainty or write an uncited material claim.",
         "Do not use or request API keys",
         "Record data gaps rather than inventing information.",
+        "所有自动生成的研究摘要、事件说明和数据缺口解释必须使用简体中文；外文原始来源标题可作为引用元数据保留。",
         "trigger, observation/target, invalidation, position limit, risk, and confidence",
     )
 

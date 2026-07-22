@@ -3,10 +3,32 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from sqlalchemy import update
+
 from stock_research.db import create_engine_at
-from stock_research.domain.enums import Direction
-from stock_research.domain.models import EventSignal, Holding
-from stock_research.repositories.reports import ReportRepository
+from stock_research.domain.enums import (
+    Action,
+    Confidence,
+    Credibility,
+    Direction,
+    EvidenceCategory,
+    EventScope,
+    Horizon,
+    Market,
+    RiskLevel,
+    RunStatus,
+    Trend,
+)
+from stock_research.domain.models import (
+    EventSignal,
+    Holding,
+    MarketStatus,
+    PreviousDayPerformance,
+    Recommendation,
+    StockConfig,
+    TechnicalSnapshot,
+)
+from stock_research.repositories.reports import ReportRepository, reports
 from stock_research.services.report_builder import ReportBuilder
 from stock_research.services.report_store import ReportStore
 
@@ -59,6 +81,87 @@ def test_formats_retain_unicode_symbol_warning_and_citation(tmp_path: Path) -> N
     assert 'href="https://example.test/SH.600000/0"' in html
 
 
+def test_markdown_and_html_render_chinese_display_labels_and_enum_values(tmp_path: Path) -> None:
+    report = make_complete_report()
+    analysis = report.analyses[0]
+    recommendations = [
+        analysis.recommendations[0].model_copy(update={"action": Action.WATCH}),
+        *analysis.recommendations[1:],
+    ]
+    report = report.model_copy(
+        update={"analyses": [analysis.model_copy(update={"recommendations": recommendations})]}
+    )
+
+    paths = ReportStore(tmp_path).save(report)
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+    payload = json.loads(paths.json.read_text(encoding="utf-8"))
+
+    assert "运行状态：成功" in markdown
+    assert "股票代码：SH.600000" in markdown
+    assert "市场：A股" in markdown
+    assert "操作：观望" in markdown
+    assert "风险等级/置信度：" in markdown
+    assert "run_status" not in markdown
+    assert "action" not in markdown
+    assert "<dt>运行状态</dt><dd>成功</dd>" in html
+    assert "<dt>股票代码</dt><dd>SH.600000</dd>" in html
+    assert "<dt>操作</dt><dd>观望</dd>" in html
+    assert "run_status" not in html
+    assert "action" not in html
+    assert payload["run_status"] == "success"
+    assert payload["analyses"][0]["recommendations"][0]["action"] == "watch"
+
+
+def test_display_mapping_covers_all_rendered_fields_enums_and_nullable_values() -> None:
+    displayed_models = (
+        StockConfig,
+        Holding,
+        MarketStatus,
+        PreviousDayPerformance,
+        TechnicalSnapshot,
+        EventSignal,
+        Recommendation,
+    )
+    enum_values = (
+        *Market,
+        *Trend,
+        *Horizon,
+        *Action,
+        *RiskLevel,
+        *Confidence,
+        *RunStatus,
+        *Direction,
+        *EventScope,
+        *EvidenceCategory,
+        *Credibility,
+    )
+
+    for model in displayed_models:
+        for field_name in model.model_fields:
+            assert ReportStore._display_field(field_name) != field_name
+    enum_field_names = {
+        Market: "market",
+        Trend: "trend",
+        Horizon: "horizon",
+        Action: "action",
+        RiskLevel: "risk_level",
+        Confidence: "confidence",
+        RunStatus: "run_status",
+        Direction: "direction",
+        EventScope: "scope",
+        EvidenceCategory: "category",
+        Credibility: "credibility",
+    }
+    for enum_value in enum_values:
+        assert ReportStore._display_value(
+            enum_value.value, enum_field_names[type(enum_value)]
+        ) != str(enum_value.value)
+    assert ReportStore._display_value(None) == "无"
+    assert ReportStore._display_value(True) == "是"
+    assert ReportStore._display_value(False) == "否"
+
+
 def test_report_repository_reads_latest_and_dates_from_sqlite(tmp_path: Path) -> None:
     repository = ReportRepository(create_engine_at(tmp_path / "metadata.sqlite3"))
     report = make_complete_report()
@@ -71,6 +174,99 @@ def test_report_repository_reads_latest_and_dates_from_sqlite(tmp_path: Path) ->
     assert latest.run_status == report.run_status
     assert latest.analyses[0].recommendations[0].citation_urls
     assert repository.list_dates() == [report.report_date]
+
+
+def test_report_repository_reads_legacy_data_gap_fallback_rationale(tmp_path: Path) -> None:
+    repository = ReportRepository(create_engine_at(tmp_path / "metadata.sqlite3"))
+    report = ReportBuilder().build(
+        make_request(make_research()),
+        [make_stock()],
+        FakeMarketData(unavailable={"SH.600000"}),
+    )
+    repository.save(report)
+
+    payload = report.model_dump(mode="json")
+    gap = payload["analyses"][0]["data_gaps"][0]
+    for recommendation in payload["analyses"][0]["recommendations"]:
+        recommendation["rationale"] = [f"Data-gap fallback: {gap}"]
+    with repository.engine.begin() as connection:
+        connection.execute(
+            update(reports)
+            .where(reports.c.report_date == report.report_date)
+            .values(report_json=json.dumps(payload, ensure_ascii=False))
+        )
+
+    restored = repository.latest()
+
+    assert restored is not None
+    assert restored.analyses[0].recommendations[0].rationale == [f"Data-gap fallback: {gap}"]
+
+
+def test_legacy_data_gap_fallback_rationale_renders_in_chinese(tmp_path: Path) -> None:
+    repository = ReportRepository(create_engine_at(tmp_path / "metadata.sqlite3"))
+    report = ReportBuilder().build(
+        make_request(make_research()),
+        [make_stock()],
+        FakeMarketData(unavailable={"SH.600000"}),
+    )
+    repository.save(report)
+
+    payload = report.model_dump(mode="json")
+    gap = payload["analyses"][0]["data_gaps"][0]
+    for recommendation in payload["analyses"][0]["recommendations"]:
+        recommendation["rationale"] = [f"Data-gap fallback: {gap}"]
+    with repository.engine.begin() as connection:
+        connection.execute(
+            update(reports)
+            .where(reports.c.report_date == report.report_date)
+            .values(report_json=json.dumps(payload, ensure_ascii=False))
+        )
+
+    restored = repository.latest()
+    assert restored is not None
+    paths = ReportStore(tmp_path / "rendered", repository=repository).save(restored)
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+
+    assert f"数据缺口：{gap}" in markdown
+    assert f"数据缺口：{gap}" in html
+    assert "Data-gap fallback:" not in markdown
+    assert "Data-gap fallback:" not in html
+
+
+def test_contextual_medium_labels_render_in_markdown_and_html(tmp_path: Path) -> None:
+    report = make_complete_report()
+    analysis = report.analyses[0]
+    recommendations = [
+        recommendation.model_copy(
+            update={"risk_level": RiskLevel.MEDIUM, "confidence": Confidence.MEDIUM}
+        )
+        if recommendation.horizon is Horizon.MEDIUM
+        else recommendation
+        for recommendation in analysis.recommendations
+    ]
+    report = report.model_copy(
+        update={"analyses": [analysis.model_copy(update={"recommendations": recommendations})]}
+    )
+
+    paths = ReportStore(tmp_path).save(report)
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+    payload = json.loads(paths.json.read_text(encoding="utf-8"))
+
+    assert "风险等级/置信度：中等/中等" in markdown
+    assert "<dt>建议周期</dt><dd>中线</dd>" in html
+    assert "<dt>风险等级</dt><dd>中等</dd>" in html
+    assert "<dt>置信度</dt><dd>中等</dd>" in html
+    assert ReportStore._display_value(Horizon.MEDIUM.value, "horizon") == "中线"
+    assert ReportStore._display_value(RiskLevel.MEDIUM.value, "risk_level") == "中等"
+    assert ReportStore._display_value(Confidence.MEDIUM.value, "confidence") == "中等"
+    rendered_recommendation = next(
+        item for item in payload["analyses"][0]["recommendations"] if item["horizon"] == "medium"
+    )
+    assert rendered_recommendation["horizon"] == "medium"
+    assert rendered_recommendation["risk_level"] == "medium"
+    assert rendered_recommendation["confidence"] == "medium"
 
 
 def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Path) -> None:
@@ -108,7 +304,7 @@ def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Pat
     expected_facts = [
         "2026-07-21",
         "2026-07-20",
-        "Informational return versus cost basis: +79.00%.",
+        "相对成本价的信息性收益：+79.00%。",
         "Confirmed exchange event notice",
         "https://example.test/confirmed-event",
     ]
