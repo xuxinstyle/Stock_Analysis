@@ -18,7 +18,9 @@ _HEADERS = {"Content-Type": "application/json; charset=utf-8"}
 _DEFAULT_REPORT_TITLE = "股票研究报告"
 _SECTION_DISCLAIMER = "仅供研究参考，不构成个性化投资建议、收益保证或交易指令。"
 _SECTION_MESSAGE_PREFIX = f"{_SECTION_DISCLAIMER}\n\n"
-_COMPANY_HEADING = re.compile(r"^# (?P<label>(?:SH|SZ|BJ|HK)\.\S+ .+)$", re.MULTILINE)
+_COMPANY_HEADING = re.compile(
+    r"^# (?P<label>(?:SH|SZ|BJ|HK)\.\S+ .+)\n\n(?=## 股票配置$)", re.MULTILINE
+)
 _AGGREGATE_SUMMARY_HEADING = re.compile(r"^## 全部标的操作汇总$", re.MULTILINE)
 
 
@@ -106,12 +108,13 @@ def split_text_for_feishu(
 
 def split_report_sections(markdown: str) -> list[tuple[str, str]]:
     company_headings = list(_COMPANY_HEADING.finditer(markdown))
-    aggregate_heading = _AGGREGATE_SUMMARY_HEADING.search(markdown)
+    aggregate_headings = list(_AGGREGATE_SUMMARY_HEADING.finditer(markdown))
     if not company_headings:
         raise FeishuNotificationError("saved Markdown report does not contain company sections")
-    if aggregate_heading is None:
+    if not aggregate_headings:
         raise FeishuNotificationError("saved Markdown report does not contain aggregate summary")
 
+    aggregate_heading = aggregate_headings[-1]
     aggregate_start = aggregate_heading.start()
     if company_headings[-1].start() >= aggregate_start:
         raise FeishuNotificationError("saved Markdown report has invalid company section order")
@@ -207,17 +210,17 @@ class FeishuNotificationService:
         return self._send_messages(messages)
 
     def send_report_sections(self, report_date: date, markdown: str) -> int:
-        sent_segments = 0
-        for report_title, section_markdown in split_report_sections(markdown):
-            sent_segments += self._send_messages(
-                split_text_for_feishu(
-                    section_markdown,
-                    report_date,
-                    report_title=report_title,
-                    message_prefix=_SECTION_MESSAGE_PREFIX,
-                )
+        messages = [
+            message
+            for report_title, section_markdown in split_report_sections(markdown)
+            for message in split_text_for_feishu(
+                section_markdown,
+                report_date,
+                report_title=report_title,
+                message_prefix=_SECTION_MESSAGE_PREFIX,
             )
-        return sent_segments
+        ]
+        return self._send_messages(messages)
 
     def _send_messages(self, messages: list[str]) -> int:
         for segment_number, message in enumerate(messages, start=1):
