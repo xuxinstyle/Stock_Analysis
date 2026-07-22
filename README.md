@@ -22,8 +22,10 @@ use `.\.venv\Scripts\stock-research.exe` on Windows or `.venv/bin/stock-research
 ## Feishu report notification
 
 Every successful `stock-research generate --input ...` saves the JSON, Markdown, and HTML report
-first, then sends one Feishu V2 custom-bot message for each company section and one separate
-message for the final all-symbol action summary. This includes manual runs and repeat runs. The
+first, then sends every report section to Feishu: a market-overview message containing the report
+preamble (daily title, market status, global risks, and run warnings), one message for each company
+section, and one separate message for the final all-symbol action summary. This includes manual runs
+and repeat runs. The
 Webhook is read only from the user-level
 `STOCK_RESEARCH_FEISHU_WEBHOOK_URL` environment variable and is never stored in this repository.
 
@@ -35,8 +37,8 @@ On Windows, configure it without placing the URL in a source or configuration fi
 
 Restart the Codex App or terminal after setting the variable so future local automation processes
 inherit it. Feishu's single V2 request-body limit is 20KB; the application uses a conservative
-18KiB limit and splits only an overlong company or summary message into numbered UTF-8-safe
-segments. If a notification fails, the report remains saved and its original run record remains
+18KiB limit and splits only an overlong report section into numbered UTF-8-safe segments. If a
+notification fails, the report remains saved and its original run record remains
 available, but `generate` returns a nonzero status and identifies the failed notification segment.
 Correct the local environment setting or webhook availability, then explicitly run `generate`
 again; the report is sent again rather than silently retried.

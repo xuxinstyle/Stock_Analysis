@@ -173,9 +173,10 @@ never directly determine a buy, reduce, or avoid view. Never invent citations.
    Before this step, ensure the local automation process has a user-level
    `STOCK_RESEARCH_FEISHU_WEBHOOK_URL` environment variable configured for the Feishu V2 custom
    robot. Never print, write, request, or embed the Webhook value in this prompt, a report, source
-   code, configuration, or the local-run note. `generate` saves the report first, then sends one
-   message per company section and a separate final all-symbol action-summary message to Feishu;
-   it safely numbers and splits only overlong individual sections. If that notification fails,
+   code, configuration, or the local-run note. `generate` saves the report first, then sends every
+   report section to Feishu: the market overview/preamble, one message per company section, and a
+   separate final all-symbol action-summary message. It safely numbers and splits only overlong
+   individual sections. If that notification fails,
    keep the saved report, record the failure, and do not invent a successful delivery.
 
    ```powershell

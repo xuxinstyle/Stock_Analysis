@@ -111,7 +111,12 @@ def split_report_sections(markdown: str) -> list[tuple[str, str]]:
     if company_headings[-1].start() >= aggregate_start:
         raise FeishuNotificationError("saved Markdown report has invalid company section order")
 
-    sections: list[tuple[str, str]] = []
+    sections: list[tuple[str, str]] = [
+        (
+            f"{_DEFAULT_REPORT_TITLE} — 市场概览",
+            _section_text(markdown[: company_headings[0].start()]),
+        )
+    ]
     for index, heading in enumerate(company_headings):
         next_start = (
             company_headings[index + 1].start()
