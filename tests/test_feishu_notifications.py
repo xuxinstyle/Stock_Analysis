@@ -54,7 +54,9 @@ def test_send_markdown_posts_one_v2_text_payload() -> None:
     ]
 
 
-def test_send_report_sections_posts_market_overview_company_sections_and_aggregate_summary() -> None:
+def test_send_report_sections_posts_market_overview_company_sections_and_aggregate_summary() -> (
+    None
+):
     posted: list[dict[str, object]] = []
 
     def post(url: str, **kwargs: object) -> FakeResponse:
@@ -107,7 +109,9 @@ A 股：已收盘。
     assert all("不构成个性化投资建议" in text for text in texts)
 
 
-def test_send_report_sections_repeats_disclaimer_for_each_oversized_market_overview_segment() -> None:
+def test_send_report_sections_repeats_disclaimer_for_each_oversized_market_overview_segment() -> (
+    None
+):
     posted: list[dict[str, object]] = []
 
     def post(url: str, **kwargs: object) -> FakeResponse:
@@ -131,9 +135,7 @@ def test_send_report_sections_repeats_disclaimer_for_each_oversized_market_overv
     assert service.send_report_sections(date(2026, 7, 22), markdown) > 3
 
     overview_texts = [
-        payload["content"]["text"]
-        for payload in posted
-        if "市场概览" in payload["content"]["text"]
+        payload["content"]["text"] for payload in posted if "市场概览" in payload["content"]["text"]
     ]
     disclaimer = "仅供研究参考，不构成个性化投资建议、收益保证或交易指令。\n\n"
     overview_bodies = [text.split("\n", maxsplit=1)[1] for text in overview_texts]

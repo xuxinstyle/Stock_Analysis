@@ -85,9 +85,7 @@ def split_text_for_feishu(
 ) -> list[str]:
     if not text.strip():
         raise FeishuNotificationError("saved Markdown report is empty")
-    reserved_header = _message_text(
-        report_date, 99_999, 99_999, message_prefix, report_title
-    )
+    reserved_header = _message_text(report_date, 99_999, 99_999, message_prefix, report_title)
     bodies = _split_body(
         text, lambda body: _payload_size(reserved_header + body) <= MAX_REQUEST_BYTES
     )
