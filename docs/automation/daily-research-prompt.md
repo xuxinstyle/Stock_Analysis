@@ -84,6 +84,14 @@ must be Simplified Chinese. Preserve the source title and URL exactly as supplie
    `company`, `industry`, `policy`, `news`, `international`, and `product_price`.
 
 Every evidence record must include title, URL, source name, publication time, retrieval time, direction, credibility, category, summary, and affected symbol.
+
+For recommendation generation, the application applies a horizon-specific freshness filter anchored
+to the stock's latest completed trading day: short-term recommendations use only evidence published
+and events occurring in the latest 5 calendar days; medium-term uses the latest 3 calendar months;
+long-term uses the latest 2 calendar years. Retrieval time does not refresh an old source. Keep
+older material in the traceable source archive when useful, but do not cite it or use it as a
+decision input for a shorter horizon. When a horizon has no eligible evidence, preserve an explicit
+Simplified-Chinese data gap rather than substituting older material.
 6. Reconcile sources before writing. Explicitly label an item `未核实` when it cannot be
    confirmed, and label the evidence or summary `存在冲突` when credible sources materially
    disagree. State what conflicts and what would resolve it. Record data gaps rather than inventing

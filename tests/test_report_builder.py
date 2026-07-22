@@ -150,6 +150,26 @@ def test_builder_creates_complete_analysis_and_preserves_citations() -> None:
     assert all(item.citation_urls for item in analysis.recommendations)
 
 
+def test_builder_records_a_horizon_data_gap_when_recent_sources_are_unavailable() -> None:
+    stock = make_stock()
+    research = make_research().model_copy(
+        update={
+            "evidence": [
+                item.model_copy(update={"published_at": datetime(2026, 1, 1, tzinfo=UTC)})
+                for item in make_research().evidence
+            ]
+        }
+    )
+
+    report = ReportBuilder().build(make_request(research), [stock], FakeMarketData())
+    analysis = report.analyses[0]
+    short = next(item for item in analysis.recommendations if item.horizon.value == "short")
+
+    assert short.evidence_titles == []
+    assert short.citation_urls == []
+    assert any("短期建议未取得最近 5 个自然日内" in gap for gap in analysis.data_gaps)
+
+
 def test_zero_source_research_is_a_labelled_partial_without_fabricated_citations() -> None:
     stock = make_stock()
 
@@ -352,7 +372,16 @@ def test_jointly_stale_technical_and_research_dates_are_partial() -> None:
 
 def test_monday_report_uses_friday_as_expected_session() -> None:
     stock = make_stock()
-    friday_research = make_research().model_copy(update={"data_as_of": date(2026, 7, 17)})
+    research = make_research()
+    friday_research = research.model_copy(
+        update={
+            "data_as_of": date(2026, 7, 17),
+            "evidence": [
+                item.model_copy(update={"published_at": datetime(2026, 7, 17, tzinfo=UTC)})
+                for item in research.evidence
+            ],
+        }
+    )
     monday_request = make_request(friday_research).model_copy(
         update={"report_date": date(2026, 7, 20)}
     )

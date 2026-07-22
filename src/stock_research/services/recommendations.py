@@ -1,3 +1,5 @@
+from calendar import monthrange
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from math import isfinite
 
@@ -12,7 +14,13 @@ from stock_research.domain.enums import (
     RiskLevel,
     Trend,
 )
-from stock_research.domain.models import Evidence, EventSignal, Recommendation, RecommendationInput
+from stock_research.domain.models import (
+    DATA_GAP_RATIONALE_PREFIX,
+    Evidence,
+    EventSignal,
+    Recommendation,
+    RecommendationInput,
+)
 
 
 _HIGH_VOLATILITY = 0.5
@@ -49,59 +57,130 @@ _HORIZON_GUIDANCE = {
         "focus": "随时间验证的基本面、行业和政策证据",
     },
 }
+_HORIZON_EVIDENCE_WINDOWS = {
+    Horizon.SHORT: "最近 5 个自然日",
+    Horizon.MEDIUM: "最近 3 个自然月",
+    Horizon.LONG: "最近 2 个自然年",
+}
 
 
 class RecommendationEngine:
     def recommend(self, analysis_input: RecommendationInput) -> list[Recommendation]:
-        decision = self._decision(analysis_input)
+        return self.recommend_with_data_gaps(analysis_input)[0]
+
+    def recommend_with_data_gaps(
+        self, analysis_input: RecommendationInput
+    ) -> tuple[list[Recommendation], list[str]]:
         latest_close = analysis_input.technical.latest_close
         holding_impact = (
             self._holding_impact(analysis_input)
             if isfinite(latest_close) and latest_close > 0
             else None
         )
-        return [
-            Recommendation(
-                horizon=horizon,
-                position_limit=self._position_limit(
-                    horizon, decision[1], self._risk_profile(analysis_input)
-                ),
-                holding_impact=holding_impact,
-                **self._for_horizon(decision[0], horizon),
+        recommendations: list[Recommendation] = []
+        data_gaps: list[str] = []
+        for horizon in _HORIZONS:
+            decision, confidence, data_gap = self._decision(analysis_input, horizon)
+            recommendations.append(
+                Recommendation(
+                    horizon=horizon,
+                    position_limit=self._position_limit(
+                        horizon, confidence, self._risk_profile(analysis_input)
+                    ),
+                    holding_impact=holding_impact,
+                    **self._for_horizon(decision, horizon),
+                )
             )
-            for horizon in _HORIZONS
-        ]
+            if data_gap is not None and data_gap not in data_gaps:
+                data_gaps.append(data_gap)
+        return recommendations, data_gaps
 
     def _decision(
-        self, analysis_input: RecommendationInput
-    ) -> tuple[dict[str, object], Confidence]:
+        self, analysis_input: RecommendationInput, horizon: Horizon
+    ) -> tuple[dict[str, object], Confidence, str | None]:
         technical = analysis_input.technical
-        decision_evidence = self._decision_grade_evidence(analysis_input.evidence)
+        evidence = self._evidence_for_horizon(
+            analysis_input.evidence, technical.data_as_of, horizon
+        )
+        events = self._events_for_horizon(analysis_input.events, technical.data_as_of, horizon)
+        decision_evidence = self._decision_grade_evidence(evidence)
+        data_gap = self._horizon_data_gap(analysis_input, horizon) if not evidence else None
         safety_reason = self._safety_reason(
             technical.latest_close, technical.realized_volatility_20, decision_evidence
         )
         if safety_reason is not None:
-            return self._watch_decision(
-                analysis_input, safety_reason, decision_evidence or analysis_input.evidence
-            ), Confidence.LOW
+            return (
+                self._watch_decision(
+                    analysis_input, safety_reason, decision_evidence or evidence, data_gap=data_gap
+                ),
+                Confidence.LOW,
+                data_gap,
+            )
 
-        negative_event = self._confirmed_negative_event(analysis_input)
+        negative_event = self._confirmed_negative_event(analysis_input.stock.symbol, events)
         if negative_event is not None:
-            return self._event_downside_decision(analysis_input, negative_event), Confidence.HIGH
+            return (
+                self._event_downside_decision(analysis_input, negative_event),
+                Confidence.HIGH,
+                None,
+            )
 
         support = technical.support_20
         if support is not None and technical.latest_close < support:
-            return self._support_downside_decision(
-                analysis_input, decision_evidence
-            ), Confidence.MEDIUM
+            return (
+                self._support_downside_decision(analysis_input, decision_evidence),
+                Confidence.MEDIUM,
+                None,
+            )
 
         positive_evidence = self._positive_support(decision_evidence)
         if self._is_confirmed_bullish(
             technical.trend, technical.rsi_14, decision_evidence, positive_evidence
         ):
-            return self._bullish_decision(analysis_input, positive_evidence), Confidence.HIGH
+            return self._bullish_decision(analysis_input, positive_evidence), Confidence.HIGH, None
 
-        return self._neutral_watch_decision(analysis_input, decision_evidence), Confidence.MEDIUM
+        return (
+            self._neutral_watch_decision(analysis_input, decision_evidence),
+            Confidence.MEDIUM,
+            None,
+        )
+
+    @classmethod
+    def _evidence_for_horizon(
+        cls, evidence: list[Evidence], data_as_of: date, horizon: Horizon
+    ) -> list[Evidence]:
+        start = cls._horizon_start(data_as_of, horizon)
+        return [
+            item
+            for item in evidence
+            if item.published_at is not None and start <= item.published_at.date() <= data_as_of
+        ]
+
+    @classmethod
+    def _events_for_horizon(
+        cls, events: list[EventSignal], data_as_of: date, horizon: Horizon
+    ) -> list[EventSignal]:
+        start = cls._horizon_start(data_as_of, horizon)
+        return [item for item in events if start <= item.occurred_at.date() <= data_as_of]
+
+    @staticmethod
+    def _horizon_start(data_as_of: date, horizon: Horizon) -> date:
+        if horizon is Horizon.SHORT:
+            return data_as_of - timedelta(days=4)
+        if horizon is Horizon.MEDIUM:
+            month_index = data_as_of.year * 12 + data_as_of.month - 1 - 3
+            year, month_zero_index = divmod(month_index, 12)
+            month = month_zero_index + 1
+            return date(year, month, min(data_as_of.day, monthrange(year, month)[1]))
+        return date(data_as_of.year - 2, data_as_of.month, data_as_of.day)
+
+    @staticmethod
+    def _horizon_data_gap(analysis_input: RecommendationInput, horizon: Horizon) -> str:
+        return (
+            f"{analysis_input.stock.symbol}：{RecommendationEngine._horizon_name(horizon)}建议未取得"
+            f"{_HORIZON_EVIDENCE_WINDOWS[horizon]}内、截至 "
+            f"{analysis_input.technical.data_as_of.isoformat()} 的可引用研究消息。"
+        )
 
     @staticmethod
     def _decision_grade_evidence(evidence: list[Evidence]) -> list[Evidence]:
@@ -130,17 +209,17 @@ class RecommendationEngine:
         return None
 
     @staticmethod
-    def _confirmed_negative_event(analysis_input: RecommendationInput) -> EventSignal | None:
+    def _confirmed_negative_event(symbol: str, events: list[EventSignal]) -> EventSignal | None:
         return next(
             (
                 event
-                for event in analysis_input.events
+                for event in events
                 if event.direction is Direction.NEGATIVE
                 and event.is_confirmed
                 and event.scope is EventScope.LOCAL
                 and event.citation_title is not None
                 and event.citation_url is not None
-                and analysis_input.stock.symbol in event.symbols
+                and symbol in event.symbols
             ),
             None,
         )
@@ -171,14 +250,23 @@ class RecommendationEngine:
         )
 
     def _watch_decision(
-        self, analysis_input: RecommendationInput, reason: str, evidence: list[Evidence]
+        self,
+        analysis_input: RecommendationInput,
+        reason: str,
+        evidence: list[Evidence],
+        *,
+        data_gap: str | None,
     ) -> dict[str, object]:
         condition = self._named_condition(evidence)
         return {
             "action": Action.WATCH,
             "confidence": Confidence.LOW,
             "risk_level": RiskLevel.HIGH,
-            "rationale": [f"安全降级：{reason}。", f"请持续关注{condition}。"],
+            "rationale": [
+                *([f"{DATA_GAP_RATIONALE_PREFIX}{data_gap}"] if data_gap else []),
+                f"安全降级：{reason}。",
+                f"请持续关注{condition}。",
+            ],
             "trigger": f"触发条件：在重新评估仅供研究参考的观点前，先核实{condition}。",
             "observation_or_target": self._observation(analysis_input, evidence),
             "invalidation": f"失效条件：{condition}仍未获核实或发生重大变化。",

@@ -123,12 +123,13 @@ def evidence(
     credibility: Credibility,
     *,
     category: EvidenceCategory = EvidenceCategory.NEWS,
+    published_at: datetime | None = None,
 ) -> Evidence:
     return Evidence(
         title=title,
         url=f"https://example.com/{title.lower().replace(' ', '-')}",
         source_name=title,
-        published_at=datetime(2026, 7, 20, tzinfo=UTC),
+        published_at=published_at or datetime(2026, 7, 20, tzinfo=UTC),
         retrieved_at=datetime(2026, 7, 21, tzinfo=UTC),
         category=category,
         direction=direction,
@@ -260,6 +261,121 @@ def test_horizons_have_distinct_research_review_semantics() -> None:
     assert len({item.trigger for item in recommendations}) == 3
     assert len({item.observation_or_target for item in recommendations}) == 3
     assert len({item.invalidation for item in recommendations}) == 3
+
+
+def test_horizons_only_cite_evidence_inside_their_time_windows() -> None:
+    analysis_input = confirmed_bullish_input().model_copy(
+        update={
+            "evidence": [
+                evidence(
+                    "Five day filing",
+                    Direction.POSITIVE,
+                    Credibility.PRIMARY,
+                    published_at=datetime(2026, 7, 16, tzinfo=UTC),
+                ),
+                evidence(
+                    "Five day industry update",
+                    Direction.POSITIVE,
+                    Credibility.SECONDARY,
+                    published_at=datetime(2026, 7, 20, tzinfo=UTC),
+                ),
+                evidence(
+                    "Six day news",
+                    Direction.POSITIVE,
+                    Credibility.SECONDARY,
+                    published_at=datetime(2026, 7, 15, tzinfo=UTC),
+                ),
+                evidence(
+                    "Three month boundary filing",
+                    Direction.POSITIVE,
+                    Credibility.PRIMARY,
+                    published_at=datetime(2026, 4, 20, tzinfo=UTC),
+                ),
+                evidence(
+                    "Three month expired filing",
+                    Direction.POSITIVE,
+                    Credibility.PRIMARY,
+                    published_at=datetime(2026, 4, 19, tzinfo=UTC),
+                ),
+                evidence(
+                    "Two year boundary filing",
+                    Direction.POSITIVE,
+                    Credibility.PRIMARY,
+                    published_at=datetime(2024, 7, 20, tzinfo=UTC),
+                ),
+                evidence(
+                    "Two year expired filing",
+                    Direction.POSITIVE,
+                    Credibility.PRIMARY,
+                    published_at=datetime(2024, 7, 19, tzinfo=UTC),
+                ),
+            ]
+        }
+    )
+
+    recommendations = RecommendationEngine().recommend(analysis_input)
+    titles = {item.horizon: set(item.evidence_titles) for item in recommendations}
+
+    assert titles[Horizon.SHORT] == {"Five day filing", "Five day industry update"}
+    assert titles[Horizon.MEDIUM] == {
+        "Five day filing",
+        "Five day industry update",
+        "Six day news",
+        "Three month boundary filing",
+    }
+    assert titles[Horizon.LONG] == {
+        "Five day filing",
+        "Five day industry update",
+        "Six day news",
+        "Three month boundary filing",
+        "Three month expired filing",
+        "Two year boundary filing",
+    }
+
+
+def test_unknown_publication_time_becomes_an_explicit_horizon_data_gap() -> None:
+    confirmed = confirmed_bullish_input()
+    analysis_input = confirmed.model_copy(
+        update={
+            "evidence": [
+                item.model_copy(update={"published_at": None}) for item in confirmed.evidence
+            ]
+        }
+    )
+
+    recommendations, data_gaps = RecommendationEngine().recommend_with_data_gaps(analysis_input)
+
+    assert all(not item.evidence_titles for item in recommendations)
+    assert len(data_gaps) == 3
+    assert any("短期建议未取得最近 5 个自然日内" in gap for gap in data_gaps)
+
+
+def test_old_confirmed_event_does_not_drive_the_short_horizon() -> None:
+    analysis_input = confirmed_bullish_input(holding=held_position()).model_copy(
+        update={
+            "events": [
+                EventSignal(
+                    title="Six day adverse event",
+                    occurred_at=datetime(2026, 7, 14, tzinfo=UTC),
+                    direction=Direction.NEGATIVE,
+                    summary="The event is confirmed but outside the short recommendation window.",
+                    symbols=["SH.600000"],
+                    scope="local",
+                    is_confirmed=True,
+                    citation_title="Six day regulator notice",
+                    citation_url="https://example.com/six-day-regulator-notice",
+                )
+            ]
+        }
+    )
+
+    recommendations = {
+        item.horizon: item for item in RecommendationEngine().recommend(analysis_input)
+    }
+
+    assert recommendations[Horizon.SHORT].action is Action.BUY_IN_TRANCHES
+    assert recommendations[Horizon.MEDIUM].action is Action.REDUCE
+    assert recommendations[Horizon.LONG].action is Action.REDUCE
 
 
 @pytest.mark.parametrize(
@@ -508,8 +624,15 @@ def test_completed_close_below_prior_bar_support_reaches_downside_decision() -> 
             "volume": [1_000.0] * len(closes),
         }
     )
-    analysis_input = confirmed_bullish_input().model_copy(
-        update={"technical": calculate_technical_snapshot(bars)}
+    confirmed = confirmed_bullish_input()
+    analysis_input = confirmed.model_copy(
+        update={
+            "technical": calculate_technical_snapshot(bars),
+            "evidence": [
+                item.model_copy(update={"published_at": datetime(2026, 6, 21, tzinfo=UTC)})
+                for item in confirmed.evidence
+            ],
+        }
     )
 
     recommendations = RecommendationEngine().recommend(analysis_input)

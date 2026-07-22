@@ -207,6 +207,10 @@ def test_generate_uses_request_market_sessions_for_divergent_closed_markets(
     for research in payload["research_inputs"]:
         if research["symbol"].startswith(("SH.", "SZ.")):
             research["data_as_of"] = "2026-07-17"
+            for event in research["events"]:
+                event["occurred_at"] = "2026-07-17T16:00:00+08:00"
+            for source in research["evidence"]:
+                source["published_at"] = "2026-07-17T16:00:00+08:00"
     request_path = tmp_path / "divergent-market-sessions.json"
     request_path.write_text(json.dumps(payload), encoding="utf-8")
     assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0

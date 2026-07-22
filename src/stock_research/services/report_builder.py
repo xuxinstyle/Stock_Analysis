@@ -108,7 +108,7 @@ class ReportBuilder:
                 )
                 continue
             previous_day = self._previous_day(bars, research.news_summary)
-            recommendations = self._recommendation_engine.recommend(
+            recommendations, horizon_gaps = self._recommendation_engine.recommend_with_data_gaps(
                 RecommendationInput(
                     stock=stock,
                     technical=technical,
@@ -116,6 +116,7 @@ class ReportBuilder:
                     events=research.events,
                 )
             )
+            warnings.extend(horizon_gaps)
             analyses.append(
                 StockAnalysis(
                     stock=stock,
@@ -123,6 +124,7 @@ class ReportBuilder:
                     technical=technical,
                     research=research,
                     recommendations=recommendations,
+                    data_gaps=horizon_gaps,
                 )
             )
 

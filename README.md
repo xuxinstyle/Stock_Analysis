@@ -171,6 +171,12 @@ promises. Before acting on any report, read its **来源与数据缺口** (sourc
 open the cited sources, check the run warnings and market dates, and account for any conflicting or
 unverified claims. A `partial` report must not be read as complete coverage.
 
+Recommendation citations are time-scoped to the latest completed trading day: short horizon uses
+only the most recent 5 calendar days, medium horizon the most recent 3 calendar months, and long
+horizon the most recent 2 calendar years. Evidence publication time and event occurrence time are
+used for this filter; retrieval time never makes an old source current. Older material remains in
+the source archive but is not used as a citation or decision input for a shorter horizon.
+
 The available holding risk profiles are `conservative` (保守型), `balanced` (均衡型), and
 `aggressive` (进取型). For non-low-confidence research views, the profile changes only the
 conditional percentage cap for short / medium / long horizons:
