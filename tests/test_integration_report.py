@@ -90,10 +90,10 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
     assert f"- 生成时间：{report.generated_at.isoformat()}" in markdown
     assert f"- A股：可用；数据截至：{date_contract['market']}；" in markdown
     assert f"- 研究数据截至：{date_contract['research']}" in markdown
-    previous_markdown = _between(markdown, "## 前日表现与原因", "## 基本面分析")
-    assert f"数据截至 {date_contract['previous_day']}，收盘" in previous_markdown
+    previous_markdown = _between(markdown, "## 前日表现与原因", "## 近期股价涨跌原因")
+    assert f"数据截至 {date_contract['previous_day']}；收盘" in previous_markdown
     technical_markdown = _between(markdown, "## 技术面分析", "## 政策分析")
-    assert f"数据截至 {date_contract['technical']}，收盘" in technical_markdown
+    assert f"数据截至 {date_contract['technical']}；收盘" in technical_markdown
 
     assert f"<dt>报告日期</dt><dd>{date_contract['report']}</dd>" in html
     assert f"<dt>生成时间</dt><dd>{report.generated_at.isoformat()}</dd>" in html
@@ -102,11 +102,13 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
     research_html = _between(html, "<section><h2>消息面分析</h2>", "<section><h2>突发事件</h2>")
     assert f"<strong>研究数据截至：</strong>{date_contract['research']}" in research_html
     previous_html = _between(
-        html, "<section><h2>前日表现与原因</h2>", "<section><h2>基本面分析</h2>"
+        html,
+        "<section><h2>前日表现与原因</h2>",
+        "<section><h2>近期股价涨跌原因</h2>",
     )
-    assert f"<dt>数据截至</dt><dd>{date_contract['previous_day']}</dd>" in previous_html
+    assert f"数据截至 {date_contract['previous_day']}；收盘" in previous_html
     technical_html = _between(html, "<section><h2>技术面分析</h2>", "<section><h2>政策分析</h2>")
-    assert f"<dt>数据截至</dt><dd>{date_contract['technical']}</dd>" in technical_html
+    assert f"数据截至 {date_contract['technical']}；收盘" in technical_html
 
     json_facts = (
         analysis.stock.symbol,

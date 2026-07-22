@@ -108,6 +108,26 @@ def test_report_contains_all_required_sections_per_stock(tmp_path: Path) -> None
     assert not list(paths.json.parent.glob("*.tmp"))
 
 
+def test_report_uses_compact_per_stock_presentation(tmp_path: Path) -> None:
+    report = make_complete_report()
+
+    paths = ReportStore(tmp_path).save(report)
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+    stock_section = "\n".join(ReportStore._markdown_analysis(report.analyses[0]))
+
+    assert "## 股票配置\n- 市场：" in markdown
+    technical_section = stock_section.split("## 技术面分析\n", maxsplit=1)[1].split(
+        "\n\n## 政策分析", maxsplit=1
+    )[0]
+    assert "收盘" in technical_section
+    assert "- 建议依据标题：" not in markdown
+    assert "- 获取时间：" not in markdown
+    assert "Local cited source 0" in markdown
+    assert len(stock_section.splitlines()) <= 60
+    assert html.count("<dt>") < 20
+
+
 def test_report_renders_recent_price_move_analysis_in_all_channels(tmp_path: Path) -> None:
     summary = "近五个完整交易日上涨；已证实驱动见引用，行业联动仅为推断。"
     payload = make_complete_report().model_dump(mode="json")
@@ -143,7 +163,10 @@ def test_notification_sections_follow_report_structure_not_research_text() -> No
     assert sections[0][0].endswith("市场概览")
     assert sections[1][0].endswith("SH.600000 Example Stock")
     assert sections[2][0].endswith("全部标的操作汇总")
-    assert forged_heading in sections[1][1]
+    assert forged_heading not in sections[1][1]
+    assert sections[1][1].startswith("# SH.600000 Example Stock")
+    assert sections[1][1].count("\n# ") == 0
+    assert sections[1][1].count("\n## 股票配置") == 1
     assert all(forged_heading not in title for title, _ in sections)
     assert [line for line in ReportStore._render_markdown(report).splitlines() if line] == [
         line for _, section in sections for line in section.splitlines() if line
@@ -232,34 +255,34 @@ def test_markdown_and_html_render_chinese_display_labels_and_enum_values(tmp_pat
     payload = json.loads(paths.json.read_text(encoding="utf-8"))
 
     assert "运行状态：成功" in markdown
-    assert "股票代码：SH.600000" in markdown
-    assert "市场：A股" in markdown
-    assert "操作：观望" in markdown
-    assert "风险等级/置信度：" in markdown
+    assert "# SH.600000 Example Stock" in markdown
+    assert "## 股票配置\n- 市场：A股" in markdown
+    assert "建议：观望（低风险 / 中等置信度）" in markdown
     assert "run_status" not in markdown
     assert "action" not in markdown
     assert "<dt>运行状态</dt><dd>成功</dd>" in html
-    assert "<dt>股票代码</dt><dd>SH.600000</dd>" in html
-    assert "<dt>操作</dt><dd>观望</dd>" in html
+    assert "<h1>SH.600000 Example Stock</h1>" in html
+    assert "<p>市场：A股；行业：Banking</p>" in html
+    assert "建议：观望（低风险 / 中等置信度）" in html
     assert "run_status" not in html
     assert "action" not in html
     assert payload["run_status"] == "success"
     assert payload["analyses"][0]["recommendations"][0]["action"] == "watch"
 
 
-def test_human_reports_render_volume_units_without_changing_json_numbers(tmp_path: Path) -> None:
+def test_compact_human_reports_omit_raw_volume_details_without_changing_json_numbers(
+    tmp_path: Path,
+) -> None:
     paths = ReportStore(tmp_path).save(make_complete_report())
 
     payload = json.loads(paths.json.read_text(encoding="utf-8"))
     markdown = paths.markdown.read_text(encoding="utf-8")
     html = paths.html.read_text(encoding="utf-8")
 
-    assert "成交量：1,790 股" in markdown
-    assert "前一日成交量：1,780 股" in markdown
-    assert "成交量变化：+0.56%" in markdown
-    assert "<dt>成交量</dt><dd>1,790 股</dd>" in html
-    assert "<dt>前一日成交量</dt><dd>1,780 股</dd>" in html
-    assert "<dt>成交量变化</dt><dd>+0.56%</dd>" in html
+    assert "成交量：1,790 股" not in markdown
+    assert "前一日成交量：1,780 股" not in markdown
+    assert "成交量变化：+0.56%" not in markdown
+    assert "<dt>成交量</dt><dd>1,790 股</dd>" not in html
     previous_day = payload["analyses"][0]["previous_day"]
     assert previous_day["volume"] == 1790.0
     assert previous_day["previous_volume"] == 1780.0
@@ -408,7 +431,7 @@ def test_legacy_data_gap_fallback_rationale_renders_in_chinese(tmp_path: Path) -
     html = paths.html.read_text(encoding="utf-8")
 
     assert f"数据缺口：{gap}" in markdown
-    assert f"数据缺口：{gap}" in html
+    assert gap in html
     assert "Data-gap fallback:" not in markdown
     assert "Data-gap fallback:" not in html
 
@@ -438,8 +461,8 @@ def test_real_legacy_report_renders_safe_chinese_without_mutating_saved_json(
         assert "已配置股票的已完成交易日数据不可用或已过期。" in content
         assert safe_gap in content
         assert "触发条件：补齐并核验缺失的本地数据后再评估。" in content
-        assert "仅观察：数据不完整时不提供价格目标。" in content
-        assert "失效条件：缺失数据仍不可获得或无法核验。" in content
+        assert "仅观察：数据不完整时不提供价格目标。" not in content
+        assert "失效条件：缺失数据仍不可获得或无法核验。" not in content
         assert "前日表现不作归因" in content
         assert "Local cited source 0" in content
         assert "https://example.test/SH.600000/0" in content
@@ -504,11 +527,9 @@ def test_legacy_system_text_collision_does_not_translate_source_owned_fields(
     markdown = paths.markdown.read_text(encoding="utf-8")
     html = paths.html.read_text(encoding="utf-8")
 
-    for field_name in ("标题", "来源名称", "摘要", "引用标题"):
-        assert f"- {field_name}：{legacy_title}" in markdown
-        assert f"<dt>{field_name}</dt><dd>{legacy_title}</dd>" in html
-    assert f"- 建议依据标题：{legacy_title}" in markdown
-    assert f"<dt>依据标题</dt><dd>{legacy_title}</dd>" in html
+    assert legacy_title in markdown
+    assert legacy_title in html
+    assert f"- 建议依据标题：{legacy_title}" not in markdown
     assert "免责声明：本报告仅供研究参考，不构成个性化投资建议、收益保证或交易指令。" in markdown
     assert (
         '<div class="notice research-notice"><strong>仅供研究使用</strong><span>'
@@ -544,15 +565,11 @@ def test_source_owned_fields_preserve_enum_like_strings(tmp_path: Path) -> None:
     markdown = paths.markdown.read_text(encoding="utf-8")
     html = paths.html.read_text(encoding="utf-8")
 
-    for field_name, source_value in (
-        ("标题", "news"),
-        ("来源名称", "company"),
-        ("引用标题", "watch"),
-    ):
-        assert f"- {field_name}：{source_value}" in markdown
-        assert f"<dt>{field_name}</dt><dd>{source_value}</dd>" in html
-    assert "- 建议依据标题：low" in markdown
-    assert "<dt>依据标题</dt><dd>low</dd>" in html
+    for content in (markdown, html):
+        assert "news" in content
+        assert "company" in content
+        assert "watch" in content
+        assert "建议依据标题：low" not in content
 
 
 def test_contextual_medium_labels_render_in_markdown_and_html(tmp_path: Path) -> None:
@@ -575,10 +592,8 @@ def test_contextual_medium_labels_render_in_markdown_and_html(tmp_path: Path) ->
     html = paths.html.read_text(encoding="utf-8")
     payload = json.loads(paths.json.read_text(encoding="utf-8"))
 
-    assert "风险等级/置信度：中等/中等" in markdown
-    assert "<dt>建议周期</dt><dd>中线</dd>" in html
-    assert "<dt>风险等级</dt><dd>中等</dd>" in html
-    assert "<dt>置信度</dt><dd>中等</dd>" in html
+    assert "建议：观望（中等风险 / 中等置信度）" in markdown
+    assert "建议：观望（中等风险 / 中等置信度）" in html
     assert ReportStore._display_value(Horizon.MEDIUM.value, "horizon") == "中线"
     assert ReportStore._display_value(RiskLevel.MEDIUM.value, "risk_level") == "中等"
     assert ReportStore._display_value(Confidence.MEDIUM.value, "confidence") == "中等"
@@ -632,23 +647,13 @@ def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Pat
     for content in rendered:
         assert all(fact in content for fact in expected_facts)
     assert 'href="https://example.test/confirmed-event"' in rendered[2]
-    assert "风险偏好：均衡型" in rendered[1]
-    assert "<dt>风险偏好</dt><dd>均衡型</dd>" in rendered[2]
+    assert "持仓：100 股，成本 10" in rendered[1]
+    assert "持仓：100 股，成本 10" in rendered[2]
+    assert "风险偏好：均衡型" not in rendered[1]
+    assert "风险偏好：均衡型" not in rendered[2]
     assert json.loads(rendered[0])["analyses"][0]["stock"]["holding"]["risk_profile"] == "balanced"
 
-    analysis = report.analyses[0]
-    structured_models = [
-        analysis.stock,
-        analysis.stock.holding,
-        *analysis.research.events,
-        analysis.previous_day,
-        analysis.technical,
-        *analysis.research.evidence,
-    ]
-    for model in structured_models:
-        assert model is not None
-        for field_name, field_value in ReportStore._structured_fields(model):
-            assert field_name in rendered[1]
-            assert field_name in rendered[2]
-            assert field_value in rendered[1]
-            assert field_value in rendered[2]
+    for content in rendered[1:]:
+        assert event.title in content
+        assert event.citation_title in content
+        assert "现金可用" not in content

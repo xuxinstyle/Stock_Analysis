@@ -322,6 +322,12 @@ class ReportStore:
             report=report,
             recommendation_for=self._recommendation_for,
             recommendation_summary=self._recommendation_summary,
+            recommendation_detail=self._recommendation_detail,
+            stock_configuration_summary=self._stock_configuration_summary,
+            previous_day_summary=self._previous_day_summary,
+            technical_summary=self._technical_summary,
+            evidence_summary=self._evidence_summary,
+            brief_text=self._brief_text,
             structured_fields=self._structured_fields,
             display_field=self._display_field,
             display_value=self._display_value,
@@ -419,25 +425,14 @@ class ReportStore:
         return lines
 
     @staticmethod
-    def _markdown_analysis(analysis: StockAnalysis) -> list[str]:
+    def _compact_markdown_analysis(analysis: StockAnalysis) -> list[str]:
         research = analysis.research
-        previous = analysis.previous_day
-        technical = analysis.technical
         lines = [
             "",
             f"# {analysis.stock.symbol} {analysis.stock.name}",
             "",
             "## 股票配置",
-            *ReportStore._markdown_structured_fields(analysis.stock),
-            *(
-                [
-                    "",
-                    "### 持仓配置",
-                    *ReportStore._markdown_structured_fields(analysis.stock.holding),
-                ]
-                if analysis.stock.holding
-                else []
-            ),
+            f"- {ReportStore._stock_configuration_summary(analysis)}",
             (
                 f"- 研究数据截至：{research.data_as_of.isoformat()}"
                 if research
@@ -445,48 +440,44 @@ class ReportStore:
             ),
             "",
             "## 前日表现与原因",
-            (
-                f"数据截至 {previous.data_as_of.isoformat()}，收盘 {previous.close:.4f}，"
-                f"变动 {previous.change:+.4f}；"
-                f"{ReportStore._display_value(previous.reason, 'reason')}"
-                if previous
-                else "数据缺口：无可验证的已完成行情。"
-            ),
-            *ReportStore._markdown_structured_fields(previous),
+            f"- {ReportStore._previous_day_summary(analysis)}",
             "",
             "## 近期股价涨跌原因",
             (
-                research.recent_price_move_summary
+                ReportStore._brief_text(research.recent_price_move_summary, 180)
                 if research
                 else "数据缺口：缺少研究输入，无法说明近期股价涨跌原因。"
             ),
             "",
             "## 基本面分析",
-            research.fundamental_summary if research else "数据缺口：缺少研究输入。",
+            (
+                ReportStore._brief_text(research.fundamental_summary, 160)
+                if research
+                else "数据缺口：缺少研究输入。"
+            ),
             "",
             "## 行业分析",
             (
-                f"{research.industry_summary}\n\n产品价格：{research.product_price_summary}"
+                f"{ReportStore._brief_text(research.industry_summary, 140)}\n\n"
+                f"产品价格：{ReportStore._brief_text(research.product_price_summary, 160)}"
                 if research
                 else "数据缺口：缺少研究输入。"
             ),
             "",
             "## 技术面分析",
-            (
-                f"数据截至 {technical.data_as_of.isoformat()}，收盘 {technical.latest_close:.4f}，"
-                f"趋势 {ReportStore._display_value(technical.trend.value, 'trend')}，"
-                f"RSI(14) {technical.rsi_14}。"
-                if technical
-                else "数据缺口：技术指标不可用。"
-            ),
-            *ReportStore._markdown_structured_fields(technical),
+            f"- {ReportStore._technical_summary(analysis)}",
             "",
             "## 政策分析",
-            research.policy_summary if research else "数据缺口：缺少研究输入。",
+            (
+                ReportStore._brief_text(research.policy_summary, 140)
+                if research
+                else "数据缺口：缺少研究输入。"
+            ),
             "",
             "## 消息面分析",
             (
-                f"{research.news_summary}\n\n国际传导：{research.international_summary}"
+                f"{ReportStore._brief_text(research.news_summary, 140)}\n\n"
+                f"国际传导：{ReportStore._brief_text(research.international_summary, 120)}"
                 if research
                 else "数据缺口：缺少研究输入。"
             ),
@@ -495,12 +486,12 @@ class ReportStore:
         ]
         if research and research.events:
             for event in research.events:
-                lines.append(f"- {event.occurred_at.isoformat()} — {event.title}: {event.summary}")
+                lines.append(
+                    f"- {event.occurred_at.isoformat()} — {event.title}："
+                    f"{ReportStore._brief_text(event.summary, 120)}"
+                )
                 if event.citation_title and event.citation_url:
                     lines.append(f"  - 事件来源：[{event.citation_title}]({event.citation_url})")
-                lines.extend(
-                    f"  - {name}：{value}" for name, value in ReportStore._structured_fields(event)
-                )
         else:
             lines.append("- 无已提供的可验证突发事件。")
         for horizon, heading in (
@@ -511,37 +502,13 @@ class ReportStore:
             recommendation = ReportStore._recommendation_for(analysis, horizon)
             lines.extend(["", f"## {heading}"])
             if recommendation:
-                lines.extend(
-                    [
-                        f"- {ReportStore._display_field('action')}："
-                        f"{ReportStore._display_value(recommendation.action.value, 'action')}",
-                        f"- {ReportStore._display_field('risk_level')}/"
-                        f"{ReportStore._display_field('confidence')}："
-                        f"{ReportStore._display_value(recommendation.risk_level.value, 'risk_level')}/"
-                        f"{ReportStore._display_value(recommendation.confidence.value, 'confidence')}",
-                        f"- 依据：{ReportStore._display_value(recommendation.rationale, 'rationale')}",
-                        f"- {ReportStore._display_value(recommendation.trigger, 'trigger')}",
-                        f"- {ReportStore._display_value(recommendation.observation_or_target, 'observation_or_target')}",
-                        f"- {ReportStore._display_value(recommendation.invalidation, 'invalidation')}",
-                        f"- {ReportStore._display_field('position_limit')}：{recommendation.position_limit}",
-                    ]
-                )
-                if recommendation.holding_impact:
-                    lines.append(f"- 持仓影响：{recommendation.holding_impact}")
-                lines.extend(f"- 建议依据标题：{title}" for title in recommendation.evidence_titles)
-                lines.extend(f"- 建议引用：{url}" for url in recommendation.citation_urls)
+                lines.append(f"- {ReportStore._recommendation_detail(recommendation)}")
         lines.extend(["", "## 来源与数据缺口"])
         if research and research.evidence:
-            for evidence in research.evidence:
-                lines.append(
-                    f"- [{evidence.title}]({evidence.url}) — {evidence.source_name}；"
-                    f"{ReportStore._display_field('credibility')} "
-                    f"{ReportStore._display_value(evidence.credibility.value, 'credibility')}"
-                )
-                lines.extend(
-                    f"  - {name}：{value}"
-                    for name, value in ReportStore._structured_fields(evidence)
-                )
+            lines.extend(
+                f"- [{evidence.title}]({evidence.url}) — {ReportStore._evidence_summary(evidence)}"
+                for evidence in research.evidence
+            )
         else:
             lines.append("- 无已验证的引用来源。")
         lines.extend(
@@ -549,6 +516,10 @@ class ReportStore:
             for gap in analysis.data_gaps
         )
         return lines
+
+    @staticmethod
+    def _markdown_analysis(analysis: StockAnalysis) -> list[str]:
+        return ReportStore._compact_markdown_analysis(analysis)
 
     @staticmethod
     def _recommendation_for(
@@ -590,6 +561,81 @@ class ReportStore:
         risk = ReportStore._display_value(recommendation.risk_level.value, "risk_level")
         confidence = ReportStore._display_value(recommendation.confidence.value, "confidence")
         return f"{action}（{risk}风险 / {confidence}置信度）"
+
+    @staticmethod
+    def _recommendation_detail(recommendation: Recommendation) -> str:
+        summary = ReportStore._recommendation_summary(recommendation)
+        trigger = ReportStore._brief_text(
+            ReportStore._display_value(recommendation.trigger, "trigger"), 100
+        )
+        detail = f"建议：{summary}；{trigger}；仓位上限：{recommendation.position_limit}"
+        if recommendation.holding_impact:
+            detail += f"；持仓影响：{recommendation.holding_impact}"
+        return detail
+
+    @staticmethod
+    def _stock_configuration_summary(analysis: StockAnalysis) -> str:
+        stock = analysis.stock
+        parts = [
+            f"市场：{ReportStore._display_value(stock.market.value, 'market')}",
+            f"行业：{stock.industry or '未设置'}",
+        ]
+        if stock.product_price_focus:
+            parts.append(f"关注项：{'、'.join(stock.product_price_focus)}")
+        if stock.holding:
+            parts.append(f"持仓：{stock.holding.quantity} 股，成本 {stock.holding.cost_basis}")
+        return "；".join(parts)
+
+    @staticmethod
+    def _previous_day_summary(analysis: StockAnalysis) -> str:
+        previous = analysis.previous_day
+        if previous is None:
+            return "数据缺口：无可验证的已完成行情。"
+        change = (
+            f"{previous.change_percent:+.2f}%"
+            if previous.change_percent is not None
+            else f"{previous.change:+.4f}"
+        )
+        reason = ReportStore._brief_text(ReportStore._display_value(previous.reason, "reason"), 120)
+        return (
+            f"数据截至 {previous.data_as_of.isoformat()}；收盘 {previous.close:.4f}；"
+            f"涨跌 {change}；{reason}"
+        )
+
+    @staticmethod
+    def _technical_summary(analysis: StockAnalysis) -> str:
+        technical = analysis.technical
+        if technical is None:
+            return "数据缺口：技术指标不可用。"
+        parts = [
+            f"数据截至 {technical.data_as_of.isoformat()}",
+            f"收盘 {technical.latest_close:.4f}",
+            f"趋势 {ReportStore._display_value(technical.trend.value, 'trend')}",
+        ]
+        if technical.rsi_14 is not None:
+            parts.append(f"RSI(14) {technical.rsi_14:.1f}")
+        if technical.support_20 is not None:
+            parts.append(f"20 日支撑 {technical.support_20:.2f}")
+        if technical.resistance_20 is not None:
+            parts.append(f"20 日阻力 {technical.resistance_20:.2f}")
+        if technical.volume_ratio_20 is not None:
+            parts.append(f"量比 {technical.volume_ratio_20:.2f}")
+        return "；".join(parts)
+
+    @staticmethod
+    def _evidence_summary(evidence: object) -> str:
+        published_at = getattr(evidence, "published_at", None)
+        publication = published_at.date().isoformat() if published_at else "发布日期未提供"
+        return f"{getattr(evidence, 'source_name')}，{publication}"
+
+    @staticmethod
+    def _brief_text(value: object, limit: int) -> str:
+        text = " ".join(str(value).split())
+        if len(text) <= limit:
+            return text
+        ending = max((text.rfind(mark, 0, limit) for mark in "。；！？"), default=-1)
+        cutoff = ending + 1 if ending >= limit // 2 else limit
+        return text[:cutoff].rstrip("，、；：") + "……"
 
     @staticmethod
     def _markdown_structured_fields(model: BaseModel | None) -> list[str]:

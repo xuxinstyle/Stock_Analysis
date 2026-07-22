@@ -144,7 +144,9 @@ def test_report_page_preserves_report_facts_disclaimer_gaps_and_source_links(
     source = report.analyses[0].research.evidence[0]
     assert f'href="{source.url}"' in response.text
     assert source.title in response.text
-    assert report.analyses[0].recommendations[0].rationale[0] in response.text
+    assert (
+        ReportStore._recommendation_detail(report.analyses[0].recommendations[0]) in response.text
+    )
 
 
 def test_missing_report_returns_404(client: TestClient) -> None:

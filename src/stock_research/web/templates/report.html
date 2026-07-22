@@ -46,27 +46,26 @@
   <article id="{{ analysis.stock.symbol }}">
     <h1>{{ analysis.stock.symbol }} {{ analysis.stock.name }}</h1>
 
-    <section><h2>股票配置</h2><dl>{% for name, value in structured_fields(analysis.stock) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
-    {% if analysis.stock.holding %}<h3>持仓配置</h3><dl>{% for name, value in structured_fields(analysis.stock.holding) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}</section>
+    <section><h2>股票配置</h2><p>{{ stock_configuration_summary(analysis) }}</p></section>
 
-    <section><h2>前日表现与原因</h2>{% if analysis.previous_day %}<p>{{ display_value(analysis.previous_day.reason, "reason") }}</p><dl>{% for name, value in structured_fields(analysis.previous_day) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% else %}<p>数据缺口：无可验证的已完成行情。</p>{% endif %}</section>
+    <section><h2>前日表现与原因</h2><p>{{ previous_day_summary(analysis) }}</p></section>
 
-    <section><h2>近期股价涨跌原因</h2>{% if analysis.research %}<p>{{ analysis.research.recent_price_move_summary }}</p>{% else %}<p>数据缺口：缺少研究输入，无法说明近期股价涨跌原因。</p>{% endif %}</section>
+    <section><h2>近期股价涨跌原因</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.recent_price_move_summary, 180) }}</p>{% else %}<p>数据缺口：缺少研究输入，无法说明近期股价涨跌原因。</p>{% endif %}</section>
 
-    <section><h2>基本面分析</h2>{% if analysis.research %}<p>{{ analysis.research.fundamental_summary }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
-    <section><h2>行业分析</h2>{% if analysis.research %}<p>{{ analysis.research.industry_summary }}</p><p><strong>产品价格：</strong>{{ analysis.research.product_price_summary }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
-    <section><h2>技术面分析</h2>{% if analysis.technical %}<dl>{% for name, value in structured_fields(analysis.technical) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% else %}<p>数据缺口：技术指标不可用。</p>{% endif %}</section>
-    <section><h2>政策分析</h2>{% if analysis.research %}<p>{{ analysis.research.policy_summary }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
-    <section><h2>消息面分析</h2>{% if analysis.research %}<p>{{ analysis.research.news_summary }}</p><p><strong>国际传导：</strong>{{ analysis.research.international_summary }}</p><p><strong>研究数据截至：</strong>{{ analysis.research.data_as_of }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
+    <section><h2>基本面分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.fundamental_summary, 160) }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
+    <section><h2>行业分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.industry_summary, 140) }}</p><p><strong>产品价格：</strong>{{ brief_text(analysis.research.product_price_summary, 160) }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
+    <section><h2>技术面分析</h2><p>{{ technical_summary(analysis) }}</p></section>
+    <section><h2>政策分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.policy_summary, 140) }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
+    <section><h2>消息面分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.news_summary, 140) }}</p><p><strong>国际传导：</strong>{{ brief_text(analysis.research.international_summary, 120) }}</p><p><strong>研究数据截至：</strong>{{ analysis.research.data_as_of }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
 
-    <section><h2>突发事件</h2><ul class="fact-list">{% if analysis.research %}{% for event in analysis.research.events %}<li><strong>{{ event.title }}</strong> · {{ event.summary }}{% if event.citation_title and event.citation_url %}<br>事件来源：<a href="{{ event.citation_url }}">{{ event.citation_title }}</a>{% endif %}<dl>{% for name, value in structured_fields(event) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>无已提供的可验证突发事件。</li>{% endfor %}{% else %}<li>无已提供的可验证突发事件。</li>{% endif %}</ul></section>
+    <section><h2>突发事件</h2><ul class="fact-list">{% if analysis.research %}{% for event in analysis.research.events %}<li><strong>{{ event.title }}</strong> · {{ brief_text(event.summary, 120) }}{% if event.citation_title and event.citation_url %}<br>事件来源：<a href="{{ event.citation_url }}">{{ event.citation_title }}</a>{% endif %}</li>{% else %}<li>无已提供的可验证突发事件。</li>{% endfor %}{% else %}<li>无已提供的可验证突发事件。</li>{% endif %}</ul></section>
 
     {% for horizon, heading in [("short", "短线建议"), ("medium", "中线建议"), ("long", "长线建议")] %}
       {% set recommendation = recommendation_for(analysis, horizon) %}
-      <section><h2>{{ heading }}</h2>{% if recommendation %}<div class="recommendation"><dl>{% for name, value in structured_fields(recommendation) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% for title in recommendation.evidence_titles %}{% set source_index = loop.index0 %}<p>建议依据：{% if recommendation.citation_urls|length > source_index %}<a href="{{ recommendation.citation_urls[source_index] }}">{{ title }}</a>{% else %}{{ title }}{% endif %}</p>{% endfor %}</div>{% endif %}</section>
+      <section><h2>{{ heading }}</h2>{% if recommendation %}<p>{{ recommendation_detail(recommendation) }}</p>{% endif %}</section>
     {% endfor %}
 
-    <section><h2>来源与数据缺口</h2><ul class="fact-list">{% if analysis.research %}{% for evidence in analysis.research.evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> · {{ evidence.source_name }}<dl>{% for name, value in structured_fields(evidence) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>无已验证的引用来源。</li>{% endfor %}{% else %}<li>无已验证的引用来源。</li>{% endif %}{% for gap in analysis.data_gaps %}<li><strong>数据缺口：</strong>{{ display_value(gap, "data_gaps") }}</li>{% else %}<li>无已记录的数据缺口。</li>{% endfor %}</ul></section>
+    <section><h2>来源与数据缺口</h2><ul class="fact-list">{% if analysis.research %}{% for evidence in analysis.research.evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> · {{ evidence_summary(evidence) }}</li>{% else %}<li>无已验证的引用来源。</li>{% endfor %}{% else %}<li>无已验证的引用来源。</li>{% endif %}{% for gap in analysis.data_gaps %}<li><strong>数据缺口：</strong>{{ display_value(gap, "data_gaps") }}</li>{% else %}<li>无已记录的数据缺口。</li>{% endfor %}</ul></section>
   </article>
   {% endfor %}
 
