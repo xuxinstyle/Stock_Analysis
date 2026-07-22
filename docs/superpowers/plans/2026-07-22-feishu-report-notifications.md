@@ -26,7 +26,6 @@
 **Files:**
 - Create: `src/stock_research/services/feishu_notifications.py`
 - Create: `tests/test_feishu_notifications.py`
-- Modify: `src/stock_research/services/__init__.py`
 
 **Interfaces:**
 - Produces: `FeishuNotificationError(RuntimeError)`, `FeishuNotificationService`, `split_text_for_feishu(text: str, report_date: date) -> list[str]`。
@@ -81,7 +80,7 @@ Expected: PASS。
 - [ ] **Step 5: 提交该切片**
 
 ```bash
-git add src/stock_research/services/feishu_notifications.py src/stock_research/services/__init__.py tests/test_feishu_notifications.py
+git add src/stock_research/services/feishu_notifications.py tests/test_feishu_notifications.py
 git commit -m "feat(notifications): add Feishu webhook sender"
 ```
 
