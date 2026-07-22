@@ -95,12 +95,15 @@ class AkShareMarketDataProvider:
         }
         if stock.market is Market.A_SHARE:
             client = self._get_client()
-            return client.stock_zh_a_hist_tx(
-                symbol=f"{exchange}{code}",
-                start_date=arguments["start_date"],
-                end_date=arguments["end_date"],
-                adjust="qfq",
-            )
+            try:
+                return client.stock_zh_a_hist_tx(
+                    symbol=f"{exchange}{code}",
+                    start_date=arguments["start_date"],
+                    end_date=arguments["end_date"],
+                    adjust="qfq",
+                )
+            except (KeyError, TypeError, ValueError, IndexError) as error:
+                raise MarketDataUnavailable(stock.symbol, str(error)) from error
         if stock.market is Market.BEIJING:
             from opentdx.const import ADJUST, MARKET, PERIOD
 
@@ -119,7 +122,10 @@ class AkShareMarketDataProvider:
                 raise _MalformedMarketDataResponse("malformed daily-bar response") from error
         if stock.market is Market.HONG_KONG:
             client = self._get_client()
-            return client.stock_hk_hist(**arguments)
+            try:
+                return client.stock_hk_hist(**arguments)
+            except (KeyError, TypeError, ValueError, IndexError) as error:
+                raise MarketDataUnavailable(stock.symbol, str(error)) from error
         raise MarketDataUnavailable(stock.symbol, "unsupported market")
 
     def _get_client(self) -> object:

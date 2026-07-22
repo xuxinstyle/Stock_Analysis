@@ -109,6 +109,7 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
     templates = Jinja2Templates(directory=TEMPLATE_DIRECTORY)
     templates.env.globals.update(
         recommendation_for=ReportStore._recommendation_for,
+        recommendation_summary=ReportStore._recommendation_summary,
         structured_fields=ReportStore._structured_fields,
         display_field=ReportStore._display_field,
         display_value=ReportStore._display_value,

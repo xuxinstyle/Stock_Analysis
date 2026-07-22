@@ -133,3 +133,48 @@ Expected: all files already formatted.
 
 Run: `rg -n "Trigger: obtain|Observation only:|Invalidation: the missing|Data-gap fallback:" src`
 Expected: no matches.
+
+### Task 5: Close historical rendering, dashboard, prompt, and provider-boundary gaps
+
+**Files:**
+- Modify: `src/stock_research/services/report_store.py`
+- Modify: `src/stock_research/web/templates/report.html`
+- Modify: `src/stock_research/web/templates/dashboard.html`
+- Modify: `src/stock_research/services/market_data.py`
+- Modify: `docs/automation/daily-research-prompt.md`
+- Modify: `tests/test_report_store.py`
+- Modify: `tests/test_web.py`
+- Modify: `tests/test_market_data.py`
+- Modify: `tests/test_report_builder.py`
+- Modify: `tests/test_daily_run.py`
+
+- [ ] **Step 1: Write failing historical-rendering, dashboard, prompt, and provider-boundary tests**
+
+Construct a pre-localization report payload with the original English disclaimer, status message,
+`Data-gap fallback:` rationale, three original fallback fields, and a provider error containing a
+hostname, URL, and proxy text. Assert that re-rendered Markdown and HTML contain Chinese safe
+display text but that the saved JSON still contains the legacy payload. Assert that the dashboard
+uses display mappings for status, market, trend, action, and confidence. Assert that prompt prose
+uses `未核实` and `存在冲突`, not literal English reporting labels. Assert that a vendor-raised
+`ValueError` becomes `MarketDataUnavailable` and reaches the partial-report fallback.
+
+- [ ] **Step 2: Run the tests and verify each fails on the corresponding current gap**
+
+Run: `python -m pytest tests/test_report_store.py tests/test_web.py tests/test_market_data.py tests/test_daily_run.py -v`
+
+- [ ] **Step 3: Add the smallest display-only legacy sanitizer and bounded provider exception wrapper**
+
+Translate only recognized legacy system strings at rendering time. Replace recognized old
+price-data gaps with the same concise Chinese source-neutral gap used for new reports, including
+when the old gap is nested in a legacy fallback rationale, warning, or previous-day attribution.
+Do not mutate loaded models or saved JSON and do not translate source titles. Route dashboard
+machine values through the existing display helpers. Catch expected vendor parsing exceptions
+(`KeyError`, `TypeError`, `ValueError`, `IndexError`) at the raw-fetch boundary without catching
+programmer errors or changing `days <= 0` validation.
+
+- [ ] **Step 4: Verify the complete safety and language contract**
+
+Run: `python -m pytest -v`
+Run: `python -m ruff check .`
+Run: `python -m ruff format --check .`
+Run: `git diff --check`

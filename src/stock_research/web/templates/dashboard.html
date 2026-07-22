@@ -12,13 +12,13 @@
   {% if report %}
     <section class="notice research-notice" aria-label="研究用途声明">
       <strong>仅供研究使用</strong>
-      <span>{{ report.disclaimer }}</span>
+      <span>{{ display_value(report.disclaimer, "disclaimer") }}</span>
     </section>
 
     <section class="summary-grid">
       <div class="summary-card"><span>报告日期</span><strong>{{ report.report_date }}</strong></div>
       <div class="summary-card"><span>生成时间</span><strong>{{ report.generated_at.isoformat() }}</strong></div>
-      <div class="summary-card"><span>运行状态</span><strong>{{ report.run_status.value }}</strong></div>
+      <div class="summary-card"><span>运行状态</span><strong>{{ display_value(report.run_status.value, "run_status") }}</strong></div>
       <div class="summary-card"><span>覆盖股票</span><strong>{{ report.analyses|length }}</strong></div>
     </section>
 
@@ -27,19 +27,19 @@
         <h2>市场状态</h2>
         <ul class="fact-list">
           {% for item in report.market_statuses %}
-            <li><strong>{{ item.market.value }}</strong> · {{ item.status }} · {{ item.data_as_of or "无可用日期" }}<br>{{ item.message }}</li>
+            <li><strong>{{ display_value(item.market.value, "market") }}</strong> · {{ display_value(item.status, "status") }} · {{ item.data_as_of or "无可用日期" }}<br>{{ display_value(item.message, "message") }}</li>
           {% else %}<li>暂无市场状态。</li>{% endfor %}
         </ul>
       </section>
       <section class="panel">
         <h2>全局风险</h2>
-        <ul class="fact-list">{% for risk in report.global_risks %}<li>{{ risk }}</li>{% else %}<li>暂无已记录的全局风险。</li>{% endfor %}</ul>
+        <ul class="fact-list">{% for risk in report.global_risks %}<li>{{ display_value(risk, "global_risks") }}</li>{% else %}<li>暂无已记录的全局风险。</li>{% endfor %}</ul>
       </section>
     </div>
 
     <section class="panel">
       <h2>运行警告与数据缺口</h2>
-      <ul class="fact-list">{% for warning in report.run_warnings %}<li>{{ warning }}</li>{% else %}<li>无运行警告。</li>{% endfor %}</ul>
+      <ul class="fact-list">{% for warning in report.run_warnings %}<li>{{ display_value(warning, "run_warnings") }}</li>{% else %}<li>无运行警告。</li>{% endfor %}</ul>
     </section>
 
     <section class="panel wide-panel">
@@ -56,10 +56,10 @@
             <tr>
               <td><strong>{{ analysis.stock.symbol }}</strong><br><span class="muted">{{ analysis.stock.name }}</span></td>
               <td>{% if analysis.previous_day and analysis.previous_day.change_percent is not none %}{{ "%+.2f"|format(analysis.previous_day.change_percent) }}%{% elif analysis.previous_day %}{{ "%+.4f"|format(analysis.previous_day.change) }}{% else %}不可用{% endif %}</td>
-              <td>{{ analysis.technical.trend.value if analysis.technical else "不可用" }}</td>
-              <td data-horizon="short">{{ short.action.value if short else "不可用" }}</td>
-              <td>{{ short.confidence.value if short else "不可用" }}</td>
-              <td>{% if analysis.data_gaps %}{{ analysis.data_gaps|join("；") }}{% else %}无{% endif %}</td>
+              <td>{{ display_value(analysis.technical.trend.value, "trend") if analysis.technical else "不可用" }}</td>
+              <td data-horizon="short">{{ display_value(short.action.value, "action") if short else "不可用" }}</td>
+              <td>{{ display_value(short.confidence.value, "confidence") if short else "不可用" }}</td>
+              <td>{% if analysis.data_gaps %}{% for gap in analysis.data_gaps %}{% if not loop.first %}；{% endif %}{{ display_value(gap, "data_gaps") }}{% endfor %}{% else %}无{% endif %}</td>
               <td><a href="/reports/{{ report.report_date }}#{{ analysis.stock.symbol }}">详情</a></td>
             </tr>
           {% endfor %}

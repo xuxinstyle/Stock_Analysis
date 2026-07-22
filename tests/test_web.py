@@ -8,10 +8,12 @@ from pydantic import ValidationError
 from stock_research.db import create_engine_at
 from stock_research.repositories.reports import ReportRepository
 from stock_research.repositories.stocks import StockRepository
+from stock_research.domain.enums import Action, Confidence, RunStatus
+from stock_research.domain.models import DailyReport
 from stock_research.services.report_store import ReportStore
 from stock_research.web.app import ServiceContainer, StockForm, create_app
 
-from test_report_store import make_complete_report
+from test_report_store import make_complete_report, make_legacy_report_payload
 
 
 @pytest.fixture
@@ -29,8 +31,22 @@ def client(services: ServiceContainer) -> TestClient:
 
 
 def test_dashboard_shows_latest_report_summary(client: TestClient) -> None:
-    report = make_complete_report().model_copy(
-        update={"global_risks": ["全球风险样例"], "run_warnings": ["数据缺口样例"]}
+    report = make_complete_report()
+    analysis = report.analyses[0]
+    short = analysis.recommendations[0].model_copy(
+        update={"action": Action.WATCH, "confidence": Confidence.LOW}
+    )
+    report = report.model_copy(
+        update={
+            "run_status": RunStatus.PARTIAL,
+            "global_risks": ["全球风险样例"],
+            "run_warnings": ["数据缺口样例"],
+            "analyses": [
+                analysis.model_copy(
+                    update={"recommendations": [short, *analysis.recommendations[1:]]}
+                )
+            ],
+        }
     )
     client.app.state.services.reports.save(report)
 
@@ -42,8 +58,42 @@ def test_dashboard_shows_latest_report_summary(client: TestClient) -> None:
     assert "SH.600000" in response.text
     assert "全球风险样例" in response.text
     assert "数据缺口样例" in response.text
-    assert "short" in response.text
+    assert "部分完成" in response.text
+    assert "A股" in response.text
+    assert "可用" in response.text
+    assert "上行" in response.text
+    assert "观望" in response.text
+    assert "低" in response.text
+    for machine_value in ("partial", "a_share", "available", "up", "watch", "low"):
+        assert f">{machine_value}<" not in response.text
+    assert 'data-horizon="short"' in response.text
     assert 'href="/reports/2026-07-21#SH.600000"' in response.text
+
+
+def test_report_page_sanitizes_legacy_system_copy_and_provider_diagnostics(
+    client: TestClient,
+) -> None:
+    report = DailyReport.model_validate(make_legacy_report_payload())
+    client.app.state.services.reports.save(report)
+
+    response = client.get(f"/reports/{report.report_date}")
+
+    assert response.status_code == 200
+    assert "本报告仅供研究参考，不构成个性化投资建议、收益保证或交易指令。" in response.text
+    assert "SH.600000：未能取得完整的日行情数据，已暂缓技术分析。" in response.text
+    assert "触发条件：补齐并核验缺失的本地数据后再评估。" in response.text
+    assert "Local cited source 0" in response.text
+    assert 'href="https://example.test/SH.600000/0"' in response.text
+    for forbidden in (
+        "Research-only report",
+        "Completed session data",
+        "Data-gap fallback:",
+        "HTTPSConnectionPool",
+        "private.example",
+        "proxy.internal",
+        "proxy URL",
+    ):
+        assert forbidden not in response.text
 
 
 def test_report_page_preserves_report_facts_disclaimer_gaps_and_source_links(

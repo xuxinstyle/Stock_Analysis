@@ -12,6 +12,7 @@
     dl { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; }
     dt, dd { margin: 0; padding: .38rem .6rem; border-bottom: 1px solid #dbe3ed; overflow-wrap: anywhere; }
     dt { font-weight: 700; } a { color: #1769aa; } .notice { padding: 1rem; border-left: 5px solid #bd7a16; background: white; }
+    .recommendation-summary { margin-top: 2rem; padding-top: 1rem; border-top: 2px solid #dbe3ed; } .summary-table { overflow-x: auto; } table { width: 100%; border-collapse: collapse; background: white; } th, td { padding: .55rem .7rem; border: 1px solid #dbe3ed; text-align: left; vertical-align: top; white-space: nowrap; } th { background: #eaf1f8; }
   </style>
   {% else %}<link rel="stylesheet" href="/static/app.css">{% endif %}
 </head>
@@ -26,12 +27,12 @@
       <dt>{{ display_field("generated_at") }}</dt><dd>{{ report.generated_at.isoformat() }}</dd>
       <dt>{{ display_field("run_status") }}</dt><dd>{{ display_value(report.run_status.value) }}</dd>
     </dl>
-    <div class="notice research-notice"><strong>仅供研究使用</strong><span>{{ report.disclaimer }}</span></div>
+    <div class="notice research-notice"><strong>仅供研究使用</strong><span>{{ display_value(report.disclaimer, "disclaimer") }}</span></div>
   </header>
 
-  <section><h2>市场状态</h2><ul class="fact-list">{% for item in report.market_statuses %}<li><strong>{{ display_value(item.market.value) }}</strong> · {{ display_value(item.status) }} · {{ display_value(item.data_as_of) }} · {{ item.message }}<dl>{% for name, value in structured_fields(item) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>暂无市场状态。</li>{% endfor %}</ul></section>
-  <section><h2>全局风险</h2><ul class="fact-list">{% for risk in report.global_risks %}<li>{{ risk }}</li>{% else %}<li>暂无已记录的全局风险。</li>{% endfor %}</ul></section>
-  <section><h2>运行警告</h2><ul class="fact-list">{% for warning in report.run_warnings %}<li>{{ warning }}</li>{% else %}<li>无运行警告。</li>{% endfor %}</ul></section>
+  <section><h2>市场状态</h2><ul class="fact-list">{% for item in report.market_statuses %}<li><strong>{{ display_value(item.market.value, "market") }}</strong> · {{ display_value(item.status, "status") }} · {{ display_value(item.data_as_of) }} · {{ display_value(item.message, "message") }}<dl>{% for name, value in structured_fields(item) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>暂无市场状态。</li>{% endfor %}</ul></section>
+  <section><h2>全局风险</h2><ul class="fact-list">{% for risk in report.global_risks %}<li>{{ display_value(risk, "global_risks") }}</li>{% else %}<li>暂无已记录的全局风险。</li>{% endfor %}</ul></section>
+  <section><h2>运行警告</h2><ul class="fact-list">{% for warning in report.run_warnings %}<li>{{ display_value(warning, "run_warnings") }}</li>{% else %}<li>无运行警告。</li>{% endfor %}</ul></section>
 
   {% for analysis in report.analyses %}
   <article id="{{ analysis.stock.symbol }}">
@@ -40,7 +41,7 @@
     <section><h2>股票配置</h2><dl>{% for name, value in structured_fields(analysis.stock) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
     {% if analysis.stock.holding %}<h3>持仓配置</h3><dl>{% for name, value in structured_fields(analysis.stock.holding) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}</section>
 
-    <section><h2>前日表现与原因</h2>{% if analysis.previous_day %}<p>{{ analysis.previous_day.reason }}</p><dl>{% for name, value in structured_fields(analysis.previous_day) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% else %}<p>数据缺口：无可验证的已完成行情。</p>{% endif %}</section>
+    <section><h2>前日表现与原因</h2>{% if analysis.previous_day %}<p>{{ display_value(analysis.previous_day.reason, "reason") }}</p><dl>{% for name, value in structured_fields(analysis.previous_day) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% else %}<p>数据缺口：无可验证的已完成行情。</p>{% endif %}</section>
 
     <section><h2>基本面分析</h2>{% if analysis.research %}<p>{{ analysis.research.fundamental_summary }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
     <section><h2>行业分析</h2>{% if analysis.research %}<p>{{ analysis.research.industry_summary }}</p><p><strong>产品价格：</strong>{{ analysis.research.product_price_summary }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
@@ -55,9 +56,18 @@
       <section><h2>{{ heading }}</h2>{% if recommendation %}<div class="recommendation"><dl>{% for name, value in structured_fields(recommendation) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% for title in recommendation.evidence_titles %}{% set source_index = loop.index0 %}<p>建议依据：{% if recommendation.citation_urls|length > source_index %}<a href="{{ recommendation.citation_urls[source_index] }}">{{ title }}</a>{% else %}{{ title }}{% endif %}</p>{% endfor %}</div>{% endif %}</section>
     {% endfor %}
 
-    <section><h2>来源与数据缺口</h2><ul class="fact-list">{% if analysis.research %}{% for evidence in analysis.research.evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> · {{ evidence.source_name }}<dl>{% for name, value in structured_fields(evidence) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>无已验证的引用来源。</li>{% endfor %}{% else %}<li>无已验证的引用来源。</li>{% endif %}{% for gap in analysis.data_gaps %}<li><strong>数据缺口：</strong>{{ gap }}</li>{% else %}<li>无已记录的数据缺口。</li>{% endfor %}</ul></section>
+    <section><h2>来源与数据缺口</h2><ul class="fact-list">{% if analysis.research %}{% for evidence in analysis.research.evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> · {{ evidence.source_name }}<dl>{% for name, value in structured_fields(evidence) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>无已验证的引用来源。</li>{% endfor %}{% else %}<li>无已验证的引用来源。</li>{% endif %}{% for gap in analysis.data_gaps %}<li><strong>数据缺口：</strong>{{ display_value(gap, "data_gaps") }}</li>{% else %}<li>无已记录的数据缺口。</li>{% endfor %}</ul></section>
   </article>
   {% endfor %}
+
+  <section class="recommendation-summary" aria-labelledby="recommendation-summary-heading">
+    <h2 id="recommendation-summary-heading">全部标的操作汇总</h2>
+    <p>以下仅汇总本报告中的条件化研究建议，不构成交易指令。</p>
+    <div class="summary-table"><table>
+      <thead><tr><th>股票</th><th>短线建议</th><th>中线建议</th><th>长线建议</th></tr></thead>
+      <tbody>{% for analysis in report.analyses %}<tr><td>{{ analysis.stock.symbol }} {{ analysis.stock.name }}</td>{% for horizon in ["short", "medium", "long"] %}<td>{{ recommendation_summary(recommendation_for(analysis, horizon)) }}</td>{% endfor %}</tr>{% else %}<tr><td colspan="4">暂无个股分析。</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
 </main>
 </body>
 </html>

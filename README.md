@@ -131,8 +131,11 @@ not expose a hostname, URL, proxy detail, or raw network exception in report pro
 Each run is saved below `<app-home>/reports/YYYY-MM-DD/` as `report.json`, `report.md`, and
 `report.html`. All formats retain the stock identity, report and generation dates, market state,
 data-as-of dates, warnings, data gaps, disclaimer, analysis sections, short/medium/long horizons,
-and source links. SQLite stores the active configuration, report history, and run records used by
-the CLI and dashboard.
+and source links. Markdown and HTML render daily volume and prior-day volume in shares (`股`) and
+volume change as a percentage (`%`); JSON retains the corresponding numeric fields for machine
+use. Both human-readable reports end with an all-stock table that summarizes each horizon's
+conditional action, risk level, and confidence. SQLite stores the active configuration, report
+history, and run records used by the CLI and dashboard.
 
 Read the dates separately: `report_date` is the intended research day, `generated_at` is when the
 request was assembled, and each market/research/technical `data_as_of` value identifies the last
@@ -159,14 +162,17 @@ promises. Before acting on any report, read its **来源与数据缺口** (sourc
 open the cited sources, check the run warnings and market dates, and account for any conflicting or
 unverified claims. A `partial` report must not be read as complete coverage.
 
-For non-low-confidence research views, a configured holding profile changes only the conditional
-percentage cap for short / medium / long horizons:
+The available holding risk profiles are `conservative` (保守型), `balanced` (均衡型), and
+`aggressive` (进取型). For non-low-confidence research views, the profile changes only the
+conditional percentage cap for short / medium / long horizons:
 
 - conservative: ≤5% / ≤10% / ≤15%
 - balanced: ≤10% / ≤15% / ≤20%
 - aggressive: ≤15% / ≤20% / ≤25%
 
 These are research risk constraints, not capital assumptions, orders, or return estimates.
+Any low-confidence view uses the tighter `≤5%` cap for all three horizons, regardless of the
+configured profile.
 
 ## Failure recovery
 

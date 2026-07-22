@@ -173,6 +173,17 @@ class MalformedTencentAkShare:
         return []
 
 
+class ExplodingAkShare:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def stock_zh_a_hist_tx(self, **_: str) -> pd.DataFrame:
+        raise self.error
+
+    def stock_hk_hist(self, **_: str) -> pd.DataFrame:
+        raise self.error
+
+
 def test_a_share_symbol_maps_to_akshare_code() -> None:
     assert AkShareMarketDataProvider.to_vendor_code("SH.600000") == ("600000", "sh")
 
@@ -312,6 +323,33 @@ def test_fetch_daily_bars_wraps_vendor_connection_failure_as_data_gap() -> None:
 
     with pytest.raises(MarketDataUnavailable, match="public market-data endpoint disconnected"):
         provider.fetch_daily_bars(stock, end=date(2026, 7, 20), days=31)
+
+
+@pytest.mark.parametrize("market", [Market.A_SHARE, Market.HONG_KONG])
+@pytest.mark.parametrize("error_type", [KeyError, TypeError, ValueError, IndexError])
+def test_fetch_daily_bars_wraps_vendor_parsing_failures_as_data_gap(
+    market: Market, error_type: type[Exception]
+) -> None:
+    raw_error = "HTTPSConnectionPool private.example proxy URL https://private.example/v1"
+    provider = AkShareMarketDataProvider(client=ExplodingAkShare(error_type(raw_error)))
+    symbol = "SH.600000" if market is Market.A_SHARE else "HK.00700"
+    stock = StockConfig(symbol=symbol, name="Example", market=market)
+
+    with pytest.raises(MarketDataUnavailable, match="private.example"):
+        provider.fetch_daily_bars(stock, end=date(2026, 7, 20), days=31)
+
+
+def test_fetch_daily_bars_does_not_wrap_programmer_errors_or_nonpositive_days() -> None:
+    stock = StockConfig(symbol="SH.600000", name="Example", market=Market.A_SHARE)
+
+    with pytest.raises(RuntimeError, match="programmer failure"):
+        AkShareMarketDataProvider(
+            client=ExplodingAkShare(RuntimeError("programmer failure"))
+        ).fetch_daily_bars(stock, end=date(2026, 7, 20), days=31)
+    with pytest.raises(ValueError, match="days must be positive"):
+        AkShareMarketDataProvider(client=FakeAkShare()).fetch_daily_bars(
+            stock, end=date(2026, 7, 20), days=0
+        )
 
 
 def test_hk_fetch_dispatches_to_hk_client_and_normalizes_rows() -> None:

@@ -60,8 +60,8 @@ place trades.
    `company`, `industry`, `policy`, `news`, `international`, and `product_price`.
 
 Every evidence record must include title, URL, source name, publication time, retrieval time, direction, credibility, category, summary, and affected symbol.
-6. Reconcile sources before writing. Explicitly label an item `unverified` when it cannot be
-   confirmed, and label the evidence or summary `conflicting` when credible sources materially
+6. Reconcile sources before writing. Explicitly label an item `未核实` when it cannot be
+   confirmed, and label the evidence or summary `存在冲突` when credible sources materially
    disagree. State what conflicts and what would resolve it. Record data gaps rather than inventing
    information.
 
@@ -119,7 +119,7 @@ For every `evidence` entry include all of these schema fields:
   "category": "company|industry|policy|news|international|product_price",
   "direction": "positive|neutral|negative",
   "credibility": 1,
-  "summary": "at least 20 characters, including any unverified/conflicting label",
+  "summary": "at least 20 characters, including any 未核实/存在冲突 label",
   "symbols": ["the configured symbol"]
 }
 ```
@@ -127,7 +127,7 @@ For every `evidence` entry include all of these schema fields:
 For each event, include `title`, `occurred_at`, `direction`, `summary`, `symbols`, and `scope`.
 Set `is_confirmed` to `true` only when it has a cited source, and then also include
 `citation_title` and `citation_url`. Otherwise set `is_confirmed` to `false` and say
-`unverified` in the event summary. Use `local` only for an event on the configured subject;
+`未核实` in the event summary. Use `local` only for an event on the configured subject;
 use `international` for overseas or peer context. International events are context only and must
 never directly determine a buy, reduce, or avoid view. Never invent citations.
 
@@ -165,5 +165,5 @@ never directly determine a buy, reduce, or avoid view. Never invent citations.
 
 Every short, medium, and long recommendation must include trigger, observation/target, invalidation, position limit, risk, and confidence.
 
-End with a short local-run note listing the report paths, unverified/conflicting items, and
+End with a short local-run note listing the report paths, 未核实/存在冲突 items, and
 remaining data gaps. Do not send orders, broker messages, or investment instructions.

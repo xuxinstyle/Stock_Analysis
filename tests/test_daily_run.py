@@ -64,8 +64,8 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
         "title, URL, source name, publication time, retrieval time, direction, credibility, category, summary",
         "title`, `occurred_at`, `direction`, `summary`, `symbols`, and `scope`",
         "source links",
-        "unverified",
-        "conflicting",
+        "未核实",
+        "存在冲突",
         "Never place orders, connect to brokers, or execute trades.",
         "Never assert return certainty or write an uncited material claim.",
         "Do not use or request API keys",
@@ -76,6 +76,10 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
 
     for instruction in required_instructions:
         assert instruction in prompt
+
+    assert "`unverified`" not in prompt
+    assert "`conflicting`" not in prompt
+    assert "unverified/conflicting" not in prompt
 
     readme = README.read_text(encoding="utf-8")
     assert "SQLite-backed persisted active repository" in readme

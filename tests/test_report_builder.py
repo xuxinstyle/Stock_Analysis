@@ -21,7 +21,7 @@ from stock_research.domain.models import (
     StockConfig,
     StockResearchInput,
 )
-from stock_research.services.market_data import MarketDataUnavailable
+from stock_research.services.market_data import AkShareMarketDataProvider, MarketDataUnavailable
 from stock_research.services.report_builder import ReportBuilder
 
 
@@ -212,6 +212,36 @@ def test_market_failure_uses_concise_public_data_gap() -> None:
     assert all(item.action is Action.WATCH for item in analysis.recommendations)
     assert all(item.confidence.value == "low" for item in analysis.recommendations)
     assert all(item.risk_level.value == "high" for item in analysis.recommendations)
+
+
+def test_vendor_value_error_reaches_safe_partial_fallback() -> None:
+    class ParsingFailureAkShare:
+        def stock_zh_a_hist_tx(self, **_: str) -> pd.DataFrame:
+            raise ValueError(
+                "HTTPSConnectionPool(host='private.example'): proxy URL https://private.example/v1"
+            )
+
+    stock = make_stock()
+    provider = AkShareMarketDataProvider(client=ParsingFailureAkShare())
+
+    report = ReportBuilder().build(make_request(make_research()), [stock], provider)
+
+    assert report.run_status is RunStatus.PARTIAL
+    analysis = report.analyses[0]
+    assert analysis.previous_day is None
+    assert analysis.technical is None
+    assert len(analysis.recommendations) == 3
+    assert all(item.action is Action.WATCH for item in analysis.recommendations)
+    assert all(item.confidence.value == "low" for item in analysis.recommendations)
+    assert all(item.risk_level.value == "high" for item in analysis.recommendations)
+    assert all(item.position_limit == "≤0%" for item in analysis.recommendations)
+    assert all("不提供价格目标" in item.observation_or_target for item in analysis.recommendations)
+    assert all(not item.evidence_titles for item in analysis.recommendations)
+    assert all(not item.citation_urls for item in analysis.recommendations)
+    public_text = report.model_dump_json()
+    assert "HTTPSConnectionPool" not in public_text
+    assert "private.example" not in public_text
+    assert "proxy" not in public_text
 
 
 def test_builder_fetches_prices_to_declared_completed_session() -> None:

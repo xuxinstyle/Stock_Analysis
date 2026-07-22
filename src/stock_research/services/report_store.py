@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from dataclasses import dataclass
 from datetime import date
@@ -152,6 +153,37 @@ _FIELD_DISPLAY_VALUES = {
     "confidence": {"medium": "中等"},
 }
 
+_LEGACY_SYSTEM_TEXT = {
+    (
+        "Research-only report; not personalized investment advice, a return guarantee, "
+        "or an instruction to trade."
+    ): "本报告仅供研究参考，不构成个性化投资建议、收益保证或交易指令。",
+    "Completed session data is current for all configured stocks.": (
+        "所有已配置股票的已完成交易日数据均为最新。"
+    ),
+    "Completed session data is current for only part of this market.": (
+        "仅部分已配置股票的已完成交易日数据为最新。"
+    ),
+    "Completed session data is unavailable or stale for configured stocks.": (
+        "已配置股票的已完成交易日数据不可用或已过期。"
+    ),
+    "Trigger: obtain and validate the missing local data before reassessment.": (
+        "触发条件：补齐并核验缺失的本地数据后再评估。"
+    ),
+    "Observation only: no price target is produced for incomplete data.": (
+        "仅观察：数据不完整时不提供价格目标。"
+    ),
+    "Invalidation: the missing data remains unavailable or cannot be verified.": (
+        "失效条件：缺失数据仍不可获得或无法核验。"
+    ),
+}
+_LEGACY_PRICE_DATA_FIELDS = {"data_gaps", "reason", "rationale", "run_warnings"}
+_LEGACY_CLOSED_STATUS = re.compile(
+    r"Market was closed on report date (\d{4}-\d{2}-\d{2}); prior completed session "
+    r"data is current for all configured stocks\."
+)
+_LEGACY_SYMBOL_PREFIX = re.compile(r"(?P<symbol>[A-Z]{2}\.\d{5,6}):")
+
 
 @dataclass(frozen=True)
 class ReportPaths:
@@ -241,6 +273,7 @@ class ReportStore:
         return template.render(
             report=report,
             recommendation_for=self._recommendation_for,
+            recommendation_summary=self._recommendation_summary,
             structured_fields=self._structured_fields,
             display_field=self._display_field,
             display_value=self._display_value,
@@ -254,7 +287,8 @@ class ReportStore:
             "",
             f"- {ReportStore._display_field('generated_at')}：{report.generated_at.isoformat()}",
             f"- {ReportStore._display_field('run_status')}：{ReportStore._display_value(report.run_status.value)}",
-            f"- {ReportStore._display_field('disclaimer')}：{report.disclaimer}",
+            f"- {ReportStore._display_field('disclaimer')}："
+            f"{ReportStore._display_value(report.disclaimer, 'disclaimer')}",
             "",
             "## 市场状态",
         ]
@@ -263,17 +297,25 @@ class ReportStore:
                 data_as_of = ReportStore._display_value(status.data_as_of)
                 lines.append(
                     f"- {ReportStore._display_value(status.market.value)}：{ReportStore._display_value(status.status)}；"
-                    f"{ReportStore._display_field('data_as_of')}：{data_as_of}；{status.message}"
+                    f"{ReportStore._display_field('data_as_of')}：{data_as_of}；"
+                    f"{ReportStore._display_value(status.message, 'message')}"
                 )
         else:
             lines.append("- 无已配置市场。")
         lines.extend(["", "## 全局风险"])
-        lines.extend(f"- {risk}" for risk in report.global_risks or ["无已提供全局风险摘要。"])
+        lines.extend(
+            f"- {ReportStore._display_value(risk, 'global_risks')}"
+            for risk in report.global_risks or ["无已提供全局风险摘要。"]
+        )
         lines.extend(["", "## 运行警告"])
-        lines.extend(f"- {warning}" for warning in report.run_warnings or ["无。"])
+        lines.extend(
+            f"- {ReportStore._display_value(warning, 'run_warnings')}"
+            for warning in report.run_warnings or ["无。"]
+        )
 
         for analysis in report.analyses:
             lines.extend(ReportStore._markdown_analysis(analysis))
+        lines.extend(ReportStore._markdown_recommendation_summary(report.analyses))
         return "\n".join(lines) + "\n"
 
     @staticmethod
@@ -305,7 +347,8 @@ class ReportStore:
             "## 前日表现与原因",
             (
                 f"数据截至 {previous.data_as_of.isoformat()}，收盘 {previous.close:.4f}，"
-                f"变动 {previous.change:+.4f}；{previous.reason}"
+                f"变动 {previous.change:+.4f}；"
+                f"{ReportStore._display_value(previous.reason, 'reason')}"
                 if previous
                 else "数据缺口：无可验证的已完成行情。"
             ),
@@ -369,9 +412,9 @@ class ReportStore:
                         f"{ReportStore._display_value(recommendation.risk_level.value, 'risk_level')}/"
                         f"{ReportStore._display_value(recommendation.confidence.value, 'confidence')}",
                         f"- 依据：{ReportStore._display_value(recommendation.rationale, 'rationale')}",
-                        f"- {recommendation.trigger}",
-                        f"- {recommendation.observation_or_target}",
-                        f"- {recommendation.invalidation}",
+                        f"- {ReportStore._display_value(recommendation.trigger, 'trigger')}",
+                        f"- {ReportStore._display_value(recommendation.observation_or_target, 'observation_or_target')}",
+                        f"- {ReportStore._display_value(recommendation.invalidation, 'invalidation')}",
                         f"- {ReportStore._display_field('position_limit')}：{recommendation.position_limit}",
                     ]
                 )
@@ -393,7 +436,10 @@ class ReportStore:
                 )
         else:
             lines.append("- 无已验证的引用来源。")
-        lines.extend(f"- 数据缺口：{gap}" for gap in analysis.data_gaps)
+        lines.extend(
+            f"- 数据缺口：{ReportStore._display_value(gap, 'data_gaps')}"
+            for gap in analysis.data_gaps
+        )
         return lines
 
     @staticmethod
@@ -402,6 +448,40 @@ class ReportStore:
     ) -> Recommendation | None:
         expected = Horizon(horizon)
         return next((item for item in analysis.recommendations if item.horizon is expected), None)
+
+    @staticmethod
+    def _markdown_recommendation_summary(analyses: list[StockAnalysis]) -> list[str]:
+        lines = [
+            "",
+            "## 全部标的操作汇总",
+            "",
+            "以下仅汇总本报告中的条件化研究建议，不构成交易指令。",
+            "",
+            "| 股票 | 短线建议 | 中线建议 | 长线建议 |",
+            "| --- | --- | --- | --- |",
+        ]
+        for analysis in analyses:
+            recommendations = [
+                ReportStore._recommendation_summary(
+                    ReportStore._recommendation_for(analysis, horizon)
+                )
+                for horizon in (Horizon.SHORT, Horizon.MEDIUM, Horizon.LONG)
+            ]
+            lines.append(
+                f"| {analysis.stock.symbol} {analysis.stock.name} | "
+                + " | ".join(recommendations)
+                + " |"
+            )
+        return lines
+
+    @staticmethod
+    def _recommendation_summary(recommendation: Recommendation | None) -> str:
+        if recommendation is None:
+            return "未生成"
+        action = ReportStore._display_value(recommendation.action.value, "action")
+        risk = ReportStore._display_value(recommendation.risk_level.value, "risk_level")
+        confidence = ReportStore._display_value(recommendation.confidence.value, "confidence")
+        return f"{action}（{risk}风险 / {confidence}置信度）"
 
     @staticmethod
     def _markdown_structured_fields(model: BaseModel | None) -> list[str]:
@@ -426,6 +506,10 @@ class ReportStore:
             return "无"
         if isinstance(value, bool):
             return "是" if value else "否"
+        if field_name in {"volume", "previous_volume"} and isinstance(value, (int, float)):
+            return f"{value:,.0f} 股"
+        if field_name == "volume_change_percent" and isinstance(value, (int, float)):
+            return f"{value:+.2f}%"
         if isinstance(value, list):
             return ", ".join(ReportStore._display_value(item, field_name) for item in value)
         if isinstance(value, dict):
@@ -433,6 +517,19 @@ class ReportStore:
                 f"{ReportStore._display_field(str(key))}={ReportStore._display_value(item, str(key))}"
                 for key, item in sorted(value.items())
             )
+        if isinstance(value, str):
+            legacy_text = _LEGACY_SYSTEM_TEXT.get(value)
+            if legacy_text is not None:
+                return legacy_text
+            closed_status = _LEGACY_CLOSED_STATUS.fullmatch(value)
+            if closed_status is not None:
+                return (
+                    f"报告日 {closed_status.group(1)} 市场休市；所有已配置股票均使用前一已完成"
+                    "交易日的最新数据。"
+                )
+            legacy_gap = ReportStore._legacy_price_data_gap(value, field_name)
+            if legacy_gap is not None:
+                return legacy_gap
         if field_name == "rationale" and isinstance(value, str):
             if value.startswith(LEGACY_DATA_GAP_RATIONALE_PREFIX):
                 return f"{DATA_GAP_RATIONALE_PREFIX}{value.removeprefix(LEGACY_DATA_GAP_RATIONALE_PREFIX)}"
@@ -441,3 +538,24 @@ class ReportStore:
             if contextual_display is not None:
                 return contextual_display
         return _DISPLAY_VALUES.get(str(value), str(value))
+
+    @staticmethod
+    def _legacy_price_data_gap(value: str, field_name: str | None) -> str | None:
+        if field_name not in _LEGACY_PRICE_DATA_FIELDS:
+            return None
+        candidate = value
+        if field_name == "rationale" and candidate.startswith(LEGACY_DATA_GAP_RATIONALE_PREFIX):
+            candidate = candidate.removeprefix(LEGACY_DATA_GAP_RATIONALE_PREFIX)
+        if field_name == "reason" and candidate.startswith("No causal attribution: "):
+            candidate = candidate.removeprefix("No causal attribution: ")
+        if "price data unavailable (" not in candidate.lower():
+            return None
+        symbol_match = _LEGACY_SYMBOL_PREFIX.match(candidate)
+        if symbol_match is None:
+            return None
+        safe_gap = f"{symbol_match.group('symbol')}：未能取得完整的日行情数据，已暂缓技术分析。"
+        if field_name == "rationale":
+            return f"{DATA_GAP_RATIONALE_PREFIX}{safe_gap}"
+        if field_name == "reason":
+            return f"前日表现不作归因：{safe_gap}"
+        return safe_gap
