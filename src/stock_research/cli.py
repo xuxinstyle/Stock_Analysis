@@ -115,7 +115,7 @@ def load_daily_request(input_path: Path) -> DailyRunRequest:
 
 def _notify_generated_report(paths: ReportPaths, report_date: date) -> int:
     markdown = paths.markdown.read_text(encoding="utf-8")
-    return FeishuNotificationService.from_environment().send_markdown(report_date, markdown)
+    return FeishuNotificationService.from_environment().send_report_sections(report_date, markdown)
 
 
 @app.command("init")

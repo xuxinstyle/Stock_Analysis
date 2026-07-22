@@ -54,6 +54,47 @@ def test_send_markdown_posts_one_v2_text_payload() -> None:
     ]
 
 
+def test_send_report_sections_posts_one_message_per_company_and_one_aggregate_summary() -> None:
+    posted: list[dict[str, object]] = []
+
+    def post(url: str, **kwargs: object) -> FakeResponse:
+        posted.append(kwargs["json"])
+        return FakeResponse(200, {"StatusCode": 0})
+
+    service = FeishuNotificationService(
+        "https://open.feishu.cn/open-apis/bot/v2/hook/test-token",
+        post=post,
+        sleep=lambda seconds: None,
+    )
+    markdown = """# 每日股票研究报告 — 2026-07-22
+
+## 市场状态
+不发送到单家公司消息。
+
+# SZ.002594 比亚迪
+比亚迪公司分析。
+
+# SH.688268 华特气体
+华特气体公司分析。
+
+## 全部标的操作汇总
+比亚迪和华特气体的汇总不发送到单家公司消息。
+"""
+
+    assert service.send_report_sections(date(2026, 7, 22), markdown) == 3
+
+    texts = [payload["content"]["text"] for payload in posted]
+    assert len(texts) == 3
+    assert "比亚迪公司分析。" in texts[0]
+    assert "华特气体公司分析。" not in texts[0]
+    assert "华特气体公司分析。" in texts[1]
+    assert "比亚迪公司分析。" not in texts[1]
+    assert all("全部标的操作汇总" not in text for text in texts[:2])
+    assert "全部标的操作汇总" in texts[2]
+    assert "比亚迪和华特气体的汇总" in texts[2]
+    assert all("不构成个性化投资建议" in text for text in texts)
+
+
 def test_rejects_non_feishu_or_non_v2_webhook_urls() -> None:
     with pytest.raises(FeishuNotificationError, match="HTTPS V2"):
         FeishuNotificationService("https://example.com/open-apis/bot/v2/hook/token")
