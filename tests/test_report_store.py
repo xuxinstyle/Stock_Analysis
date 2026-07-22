@@ -540,6 +540,9 @@ def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Pat
     for content in rendered:
         assert all(fact in content for fact in expected_facts)
     assert 'href="https://example.test/confirmed-event"' in rendered[2]
+    assert "风险偏好：均衡型" in rendered[1]
+    assert "<dt>风险偏好</dt><dd>均衡型</dd>" in rendered[2]
+    assert json.loads(rendered[0])["analyses"][0]["stock"]["holding"]["risk_profile"] == "balanced"
 
     analysis = report.analyses[0]
     structured_models = [

@@ -166,6 +166,7 @@ _ENUM_DISPLAY_FIELDS = {
     "category",
     "credibility",
     "status",
+    "risk_profile",
 }
 
 _LEGACY_SYSTEM_TEXT = {
