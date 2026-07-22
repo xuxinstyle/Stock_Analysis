@@ -1,8 +1,9 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
 from sqlalchemy import select, update
 
 from stock_research.db import create_engine_at
@@ -123,6 +124,12 @@ def test_report_store_keeps_legacy_path_when_run_slot_is_null(tmp_path: Path) ->
     paths = ReportStore(tmp_path).save(make_complete_report())
 
     assert paths.json.parent == tmp_path / "2026-07-21"
+
+
+@pytest.mark.parametrize("run_slot", ["invalid", "../outside", "post-market"])
+def test_report_store_rejects_invalid_run_slot(tmp_path: Path, run_slot: str) -> None:
+    with pytest.raises(ValueError, match="运行时段"):
+        ReportStore(tmp_path).paths_for(date(2026, 7, 21), run_slot)
 
 
 def test_formats_retain_unicode_symbol_warning_and_citation(tmp_path: Path) -> None:

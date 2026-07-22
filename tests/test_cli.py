@@ -107,6 +107,35 @@ def test_generate_saves_report_then_notifies_for_manual_runs(
     assert "Feishu: 1 segment(s) sent" in result.stdout
 
 
+def test_generate_notifies_from_post_market_report_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    monkeypatch.setattr("stock_research.cli.AkShareMarketDataProvider", lambda: FakeMarketData())
+    payload = json.loads(
+        (TEST_DATA_DIR / "daily_research_request.json").read_text(encoding="utf-8")
+    )
+    payload["run_slot"] = "post_market"
+    request_path = tmp_path / "post-market-request.json"
+    request_path.write_text(json.dumps(payload), encoding="utf-8")
+    assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
+    notified_paths = []
+
+    def notify(paths, report_date: date) -> int:
+        assert report_date == date(2026, 7, 21)
+        notified_paths.append(paths)
+        assert paths.markdown.read_text(encoding="utf-8")
+        return 1
+
+    monkeypatch.setattr(cli, "_notify_generated_report", notify, raising=False)
+
+    result = runner.invoke(app, ["generate", "--input", str(request_path)])
+
+    assert result.exit_code == 0
+    assert notified_paths[0].markdown == tmp_path / "reports" / "2026-07-21" / "post-market" / "report.md"
+    assert "post-market" in result.stdout
+
+
 def test_generate_keeps_saved_report_when_feishu_notification_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

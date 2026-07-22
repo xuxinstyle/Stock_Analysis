@@ -167,7 +167,7 @@ def generate(
         request = load_daily_request(input_path)
         services = build_services()
         report = services.daily_run.run(request)
-        paths = services.report_store.paths_for(report.report_date)
+        paths = services.report_store.paths_for(report.report_date, report.run_slot)
     except (OSError, ValidationError, ValueError, RuntimeError) as error:
         typer.echo(f"report generation failed: {error}", err=True)
         raise typer.Exit(code=1)

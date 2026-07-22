@@ -7,6 +7,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel
@@ -254,11 +255,19 @@ class ReportStore:
         return paths
 
     def paths_for(
-        self, report_date: date, run_slot: str | None = None
+        self,
+        report_date: date,
+        run_slot: Literal["pre_market", "post_market"] | None = None,
     ) -> ReportPaths:
         destination = self.root / report_date.isoformat()
+        slot_directories = {
+            "pre_market": "pre-market",
+            "post_market": "post-market",
+        }
+        if run_slot not in (None, *slot_directories):
+            raise ValueError("运行时段仅可为 pre_market 或 post_market")
         if run_slot is not None:
-            destination /= run_slot.replace("_", "-")
+            destination /= slot_directories[run_slot]
         return ReportPaths(
             json=destination / "report.json",
             markdown=destination / "report.md",
