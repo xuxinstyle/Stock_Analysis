@@ -155,6 +155,21 @@ def test_daily_request_rejects_duplicate_market_session_metadata() -> None:
         DailyRunRequest.model_validate(payload)
 
 
+def test_daily_request_accepts_beijing_market_session_metadata() -> None:
+    request = DailyRunRequest.model_validate(
+        {
+            "report_date": "2026-07-21",
+            "generated_at": "2026-07-21T09:00:00+08:00",
+            "research_inputs": [],
+            "market_sessions": [
+                {"market": "beijing", "completed_session": "2026-07-20", "is_closed": False}
+            ],
+        }
+    )
+
+    assert request.market_sessions[0].market is Market.BEIJING
+
+
 @pytest.mark.parametrize(
     ("completed_session", "is_closed"),
     [

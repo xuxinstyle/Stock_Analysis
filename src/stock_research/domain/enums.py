@@ -3,6 +3,7 @@ from enum import IntEnum, StrEnum
 
 class Market(StrEnum):
     A_SHARE = "a_share"
+    BEIJING = "beijing"
     HONG_KONG = "hong_kong"
 
 

@@ -19,6 +19,14 @@ def test_a_share_symbol_requires_exchange_prefix() -> None:
         StockConfig(symbol="600000", name="浦发银行", market=Market.A_SHARE)
 
 
+def test_beijing_symbol_requires_current_exchange_prefix() -> None:
+    stock = StockConfig(symbol="BJ.920808", name="曙光数创", market=Market.BEIJING)
+
+    assert stock.symbol == "BJ.920808"
+    with pytest.raises(ValidationError):
+        StockConfig(symbol="BJ.872808", name="曙光数创", market=Market.BEIJING)
+
+
 def test_yaml_import_persists_optional_holding(tmp_path: Path) -> None:
     service = ConfigurationService(StockRepository(create_engine_at(tmp_path / "app.sqlite3")))
 

@@ -1,4 +1,4 @@
-# Codex daily A-share and Hong Kong research handoff
+# Codex daily A-share, BSE, and Hong Kong research handoff
 
 Use this document as the prompt body for the local Codex App daily automation. Run it in
 the `E:\Stock_Analysis` project at 09:00 China Standard Time. This is a research-only
@@ -11,7 +11,7 @@ place trades.
 - Never assert return certainty or write an uncited material claim.
 - Record data gaps rather than inventing information.
 - Do not use or request API keys, credentials, or an operating-system scheduler.
-- Research only the active configured A-share and Hong Kong subjects. Query the SQLite-backed persisted active stock list, not a YAML configuration file.
+- Research only the active configured A-share, Beijing Stock Exchange (BSE), and Hong Kong subjects. Query the SQLite-backed persisted active stock list, not a YAML configuration file.
 - The existing local application-service invocation below reads the same app home and repository used by `DailyRunService` and emits active symbol, name, market, industry, and optional holding-risk context:
 
   ```powershell
@@ -25,8 +25,8 @@ place trades.
 
 ## Research procedure
 
-1. Read every active configured symbol, name, market, industry, and holding context. Cover
-   both configured markets: A-share (`SH.` / `SZ.`) and Hong Kong (`HK.`), when present.
+1. Read every active configured symbol, name, market, industry, and holding context. Cover every
+   configured market: A-share (`SH.` / `SZ.`), Beijing Stock Exchange (`BJ.`), and Hong Kong (`HK.`), when present.
 2. Identify each market's last completed trading session before the run. Record one
    `market_sessions` entry for each configured market with its `completed_session` and
    `is_closed` status on the report date. A closed market must use its prior completed session;
@@ -69,14 +69,14 @@ derives recommendations from the cited research.
   "generated_at": "YYYY-MM-DDTHH:MM:SS+08:00",
   "market_sessions": [
     {
-      "market": "a_share or hong_kong",
+      "market": "a_share, beijing, or hong_kong",
       "completed_session": "YYYY-MM-DD",
       "is_closed": false
     }
   ],
   "research_inputs": [
     {
-      "symbol": "SH.600000 or SZ.000001 or HK.00700",
+      "symbol": "SH.600000, SZ.000001, BJ.920808, or HK.00700",
       "data_as_of": "YYYY-MM-DD",
       "fundamental_summary": "cited company and financial/operating context, or an explicit gap",
       "industry_summary": "cited industry and price/volume context, or an explicit gap",

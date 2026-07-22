@@ -308,6 +308,18 @@ def test_market_status_uses_market_specific_completed_sessions_and_keeps_stale_d
     assert "expected completed session 2026-07-20" in report.analyses[1].data_gaps[0]
 
 
+def test_market_status_includes_beijing_as_a_distinct_market() -> None:
+    stock = StockConfig(symbol="BJ.920808", name="Example BSE", market=Market.BEIJING)
+
+    report = ReportBuilder().build(
+        make_request(make_research("BJ.920808")), [stock], FakeMarketData()
+    )
+
+    assert [(status.market, status.status) for status in report.market_statuses] == [
+        (Market.BEIJING, "available")
+    ]
+
+
 @pytest.mark.parametrize(
     ("updates", "expected_message"),
     [

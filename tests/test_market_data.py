@@ -53,6 +53,10 @@ def test_hk_symbol_maps_to_akshare_code() -> None:
     assert AkShareMarketDataProvider.to_vendor_code("HK.00700") == ("00700", "hk")
 
 
+def test_beijing_symbol_maps_to_akshare_code() -> None:
+    assert AkShareMarketDataProvider.to_vendor_code("BJ.920808") == ("920808", "bj")
+
+
 def test_fetch_daily_bars_normalizes_and_sorts_rows() -> None:
     provider = AkShareMarketDataProvider(client=FakeAkShare())
     stock = StockConfig(symbol="SH.600000", name="Example", market=Market.A_SHARE)
@@ -63,6 +67,16 @@ def test_fetch_daily_bars_normalizes_and_sorts_rows() -> None:
     assert list(bars["date"])[0] == date(2026, 6, 20)
     assert list(bars["date"])[-1] == date(2026, 7, 20)
     assert bars["close"].tolist() == [value + 0.5 for value in range(1, 32)]
+
+
+def test_beijing_fetch_reuses_mainland_daily_bar_endpoint() -> None:
+    provider = AkShareMarketDataProvider(client=FakeAkShare())
+    stock = StockConfig(symbol="BJ.920808", name="Example BSE", market=Market.BEIJING)
+
+    bars = provider.fetch_daily_bars(stock, end=date(2026, 7, 20), days=31)
+
+    assert len(bars) == 31
+    assert bars.iloc[-1]["date"] == date(2026, 7, 20)
 
 
 def test_fetch_daily_bars_requires_at_least_thirty_completed_bars() -> None:

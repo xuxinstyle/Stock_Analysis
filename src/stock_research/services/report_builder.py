@@ -276,7 +276,7 @@ class ReportBuilder:
         request: DailyRunRequest,
     ) -> list[MarketStatus]:
         statuses: list[MarketStatus] = []
-        for market in (Market.A_SHARE, Market.HONG_KONG):
+        for market in (Market.A_SHARE, Market.BEIJING, Market.HONG_KONG):
             symbols = {stock.symbol for stock in stocks if stock.market is market}
             if not symbols:
                 continue

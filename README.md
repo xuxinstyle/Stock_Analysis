@@ -1,7 +1,7 @@
 # Stock Research
 
-Stock Research is a local, research-only workflow for configured mainland China A-shares and
-Hong Kong stocks. It combines cited research input with completed daily market bars, produces
+Stock Research is a local, research-only workflow for configured mainland China A-shares, Beijing
+Stock Exchange (BSE), and Hong Kong stocks. It combines cited research input with completed daily market bars, produces
 JSON, Markdown, and HTML reports, and serves the same saved history through a local dashboard.
 It does not place trades, connect to a broker, or store broker credentials.
 
@@ -21,7 +21,7 @@ use `.\.venv\Scripts\stock-research.exe` on Windows or `.venv/bin/stock-research
 
 ## First configuration
 
-Create an editable YAML configuration, review its sample A-share, Hong Kong, industry, and
+Create an editable YAML configuration, review its sample A-share, BSE, Hong Kong, industry, and
 optional holding values, then import it:
 
 ```bash
@@ -33,6 +33,9 @@ stock-research import-config config/stocks.yaml
 atomically replacing the active stock set. YAML is only an import input. After import, the daily
 source is the SQLite-backed persisted active repository; editing YAML alone does not change the
 active set. The web configuration screens update that same repository.
+
+Use `SH.######` or `SZ.######` for Shanghai/Shenzhen A-shares, `BJ.9#####` for current BSE
+securities (for example, `BJ.920808`), and `HK.#####` for Hong Kong securities.
 
 To inspect the exact active daily symbols, names, markets, industries, and optional holding-risk
 context from that repository, use the same read-only service call as the Codex prompt:
@@ -52,7 +55,7 @@ not contain broker credentials, orders, or model API credentials.
 ## Daily research workflow
 
 The Codex App prompt is [docs/automation/daily-research-prompt.md](docs/automation/daily-research-prompt.md).
-It tells Codex to read the SQLite-backed active A-share/Hong Kong set, research the last completed
+It tells Codex to read the SQLite-backed active A-share/BSE/Hong Kong set, research the last completed
 sessions, preserve source metadata, label unverified or conflicting claims, write one
 `DailyRunRequest` JSON file, validate it, generate the report, and inspect the outputs. Running
 that automation requires the Codex App to be available; it does not require user-supplied model
@@ -102,7 +105,8 @@ request was assembled, and each market/research/technical `data_as_of` value ide
 data actually used. A holiday, suspension, delayed source, or unavailable quote can therefore make
 the data-as-of date earlier than the report date.
 
-`DailyRunRequest` can provide `market_sessions` facts for each configured market. Each fact has a
+`DailyRunRequest` can provide `market_sessions` facts for each configured market, including the
+separate `beijing` market for BSE subjects. Each fact has a
 `completed_session` date and `is_closed` boolean for the report date. Explicit request facts take
 priority over the weekday fallback: a closed market with current prior-session data is shown as
 `closed`, while missing or stale coverage remains `partial` or `unavailable`.

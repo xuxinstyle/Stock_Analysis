@@ -128,6 +128,20 @@ def test_research_input_rejects_us_subject_symbol() -> None:
         StockResearchInput.model_validate(payload)
 
 
+def test_research_input_accepts_current_beijing_subject_symbol() -> None:
+    payload = valid_research_payload(symbol="BJ.920808")
+    payload["evidence"] = [
+        {**item, "symbols": ["BJ.920808"]}
+        for item in payload["evidence"]  # type: ignore[misc]
+    ]
+    payload["events"] = [
+        {**item, "symbols": ["BJ.920808"]}
+        for item in payload["events"]  # type: ignore[misc]
+    ]
+
+    assert StockResearchInput.model_validate(payload).symbol == "BJ.920808"
+
+
 @pytest.mark.parametrize(
     "summary_name",
     [

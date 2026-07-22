@@ -35,7 +35,7 @@ class AkShareMarketDataProvider:
     @staticmethod
     def to_vendor_code(symbol: str) -> tuple[str, str]:
         exchange, code = symbol.split(".", maxsplit=1)
-        return code, {"SH": "sh", "SZ": "sz", "HK": "hk"}[exchange]
+        return code, {"SH": "sh", "SZ": "sz", "BJ": "bj", "HK": "hk"}[exchange]
 
     def fetch_daily_bars(self, stock: StockConfig, end: date, days: int = 260) -> pd.DataFrame:
         if days <= 0:
@@ -60,7 +60,7 @@ class AkShareMarketDataProvider:
             "end_date": end.strftime("%Y%m%d"),
             "adjust": "qfq",
         }
-        if stock.market is Market.A_SHARE:
+        if stock.market in (Market.A_SHARE, Market.BEIJING):
             return client.stock_zh_a_hist(**arguments)
         if stock.market is Market.HONG_KONG:
             return client.stock_hk_hist(**arguments)

@@ -117,6 +117,18 @@ def test_create_stock_converts_blank_optional_holding_fields_to_none(
     assert saved[0].holding is None
 
 
+def test_create_beijing_stock_persists_the_beijing_market(client: TestClient) -> None:
+    response = client.post(
+        "/stocks/new",
+        data={"symbol": "BJ.920808", "name": "曙光数创", "market": "beijing"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    saved = client.app.state.services.stocks.list_all()
+    assert [(stock.symbol, stock.market.value) for stock in saved] == [("BJ.920808", "beijing")]
+
+
 @pytest.mark.parametrize("endpoint", ["/stocks", "/stocks/new"])
 def test_create_stock_rejects_duplicate_without_overwriting_existing_row(
     client: TestClient, endpoint: str

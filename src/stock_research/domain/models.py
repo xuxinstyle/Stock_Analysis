@@ -39,10 +39,11 @@ class StockConfig(BaseModel):
     def validate_symbol(self) -> Self:
         patterns = {
             Market.A_SHARE: r"^(SH|SZ)\.\d{6}$",
+            Market.BEIJING: r"^BJ\.9\d{5}$",
             Market.HONG_KONG: r"^HK\.\d{5}$",
         }
         if not re.fullmatch(patterns[self.market], self.symbol):
-            raise ValueError("symbol must use SH.600000, SZ.000001, or HK.00700 format")
+            raise ValueError("symbol must use SH.600000, SZ.000001, BJ.920808, or HK.00700 format")
         return self
 
 
@@ -159,8 +160,8 @@ class StockResearchInput(BaseModel):
     @field_validator("symbol")
     @classmethod
     def validate_subject_symbol(cls, value: str) -> str:
-        if not re.fullmatch(r"(?:(?:SH|SZ)\.\d{6}|HK\.\d{5})", value):
-            raise ValueError("symbol must use SH.600000, SZ.000001, or HK.00700 format")
+        if not re.fullmatch(r"(?:(?:SH|SZ)\.\d{6}|BJ\.9\d{5}|HK\.\d{5})", value):
+            raise ValueError("symbol must use SH.600000, SZ.000001, BJ.920808, or HK.00700 format")
         return value
 
     @field_validator(
