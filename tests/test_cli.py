@@ -227,6 +227,37 @@ def test_daily_request_accepts_beijing_market_session_metadata() -> None:
     assert request.market_sessions[0].market is Market.BEIJING
 
 
+def test_post_market_request_accepts_same_day_completed_session() -> None:
+    request = DailyRunRequest.model_validate(
+        {
+            "report_date": "2026-07-22",
+            "run_slot": "post_market",
+            "generated_at": "2026-07-22T23:00:00+08:00",
+            "research_inputs": [],
+            "market_sessions": [
+                {"market": "a_share", "completed_session": "2026-07-22", "is_closed": False}
+            ],
+        }
+    )
+
+    assert request.market_sessions[0].completed_session == request.report_date
+
+
+def test_post_market_request_rejects_same_day_closed_session() -> None:
+    payload = {
+        "report_date": "2026-07-22",
+        "run_slot": "post_market",
+        "generated_at": "2026-07-22T23:00:00+08:00",
+        "research_inputs": [],
+        "market_sessions": [
+            {"market": "a_share", "completed_session": "2026-07-22", "is_closed": True}
+        ],
+    }
+
+    with pytest.raises(ValidationError, match="休市市场交易日"):
+        DailyRunRequest.model_validate(payload)
+
+
 @pytest.mark.parametrize(
     ("completed_session", "is_closed"),
     [

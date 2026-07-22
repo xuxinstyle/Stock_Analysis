@@ -241,7 +241,7 @@ class ReportStore:
         )
 
     def save(self, report: DailyReport) -> ReportPaths:
-        paths = self.paths_for(report.report_date)
+        paths = self.paths_for(report.report_date, report.run_slot)
         paths.json.parent.mkdir(parents=True, exist_ok=True)
         payloads = {
             paths.json: json.dumps(report.model_dump(mode="json"), ensure_ascii=False, indent=2),
@@ -253,8 +253,12 @@ class ReportStore:
         self.repository.save(report)
         return paths
 
-    def paths_for(self, report_date: date) -> ReportPaths:
+    def paths_for(
+        self, report_date: date, run_slot: str | None = None
+    ) -> ReportPaths:
         destination = self.root / report_date.isoformat()
+        if run_slot is not None:
+            destination /= run_slot.replace("_", "-")
         return ReportPaths(
             json=destination / "report.json",
             markdown=destination / "report.md",

@@ -199,6 +199,7 @@ class MarketSession(BaseModel):
 
 class DailyRunRequest(BaseModel):
     report_date: date
+    run_slot: Literal["pre_market", "post_market"] | None = None
     generated_at: datetime
     research_inputs: list[StockResearchInput]
     market_sessions: list[MarketSession] = Field(default_factory=list)
@@ -208,8 +209,14 @@ class DailyRunRequest(BaseModel):
         markets = [session.market for session in self.market_sessions]
         if len(markets) != len(set(markets)):
             raise ValueError("market session metadata must contain each market at most once")
-        if any(session.completed_session >= self.report_date for session in self.market_sessions):
-            raise ValueError("market session completed_session must precede report_date")
+        for session in self.market_sessions:
+            if session.completed_session > self.report_date or (
+                self.run_slot != "post_market"
+                and session.completed_session == self.report_date
+            ):
+                raise ValueError("market session completed_session must precede report_date")
+            if session.is_closed and session.completed_session == self.report_date:
+                raise ValueError("休市市场交易日必须早于报告日期")
         return self
 
 
@@ -292,6 +299,7 @@ class StockAnalysis(BaseModel):
 
 class DailyReport(BaseModel):
     report_date: date
+    run_slot: Literal["pre_market", "post_market"] | None = None
     generated_at: datetime
     run_status: RunStatus
     market_statuses: list[MarketStatus] = Field(default_factory=list)

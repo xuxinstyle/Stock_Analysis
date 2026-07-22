@@ -106,6 +106,25 @@ def test_report_contains_all_required_sections_per_stock(tmp_path: Path) -> None
     assert not list(paths.json.parent.glob("*.tmp"))
 
 
+def test_report_store_separates_pre_and_post_market_reports_by_slot(tmp_path: Path) -> None:
+    store = ReportStore(tmp_path)
+    pre_market = make_complete_report().model_copy(update={"run_slot": "pre_market"})
+    post_market = make_complete_report().model_copy(update={"run_slot": "post_market"})
+
+    pre_paths = store.save(pre_market)
+    post_paths = store.save(post_market)
+
+    assert pre_paths.json.parent == tmp_path / "2026-07-21" / "pre-market"
+    assert post_paths.json.parent == tmp_path / "2026-07-21" / "post-market"
+    assert pre_paths.json.exists() and post_paths.json.exists()
+
+
+def test_report_store_keeps_legacy_path_when_run_slot_is_null(tmp_path: Path) -> None:
+    paths = ReportStore(tmp_path).save(make_complete_report())
+
+    assert paths.json.parent == tmp_path / "2026-07-21"
+
+
 def test_formats_retain_unicode_symbol_warning_and_citation(tmp_path: Path) -> None:
     report = make_complete_report().model_copy(
         update={"run_warnings": ["本地数据警告：请检查来源"]}

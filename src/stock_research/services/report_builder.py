@@ -129,6 +129,7 @@ class ReportBuilder:
         status = RunStatus.SUCCESS if not warnings else RunStatus.PARTIAL
         return DailyReport(
             report_date=request.report_date,
+            run_slot=request.run_slot,
             generated_at=request.generated_at,
             run_status=status,
             market_statuses=self._market_statuses(stocks, analyses, request),
