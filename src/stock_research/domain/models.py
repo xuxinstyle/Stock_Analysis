@@ -37,7 +37,22 @@ class StockConfig(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     market: Market
     industry: str | None = None
+    product_price_focus: list[str] = Field(default_factory=list, max_length=12)
     holding: Holding | None = None
+
+    @field_validator("product_price_focus")
+    @classmethod
+    def normalize_product_price_focus(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for item in value:
+            name = item.strip()
+            if not name:
+                raise ValueError("product price focus items must not be blank")
+            if len(name) > 80:
+                raise ValueError("product price focus items must not exceed 80 characters")
+            if name not in normalized:
+                normalized.append(name)
+        return normalized
 
     @model_validator(mode="after")
     def validate_symbol(self) -> Self:

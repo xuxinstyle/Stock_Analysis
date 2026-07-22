@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from sqlalchemy import text
+
 from stock_research.db import create_engine_at
 from stock_research.domain.enums import Market
 from stock_research.domain.models import StockConfig
@@ -36,6 +38,32 @@ def test_yaml_import_persists_optional_holding(tmp_path: Path) -> None:
     assert saved[0].symbol == "SH.600000"
     assert saved[0].holding is not None
     assert saved[0].holding.cost_basis == Decimal("10.50")
+    assert saved[0].product_price_focus == ["氦气"]
+
+
+def test_repository_migrates_legacy_stock_configuration_with_product_price_focus(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine_at(tmp_path / "legacy.sqlite3")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE stocks (symbol VARCHAR PRIMARY KEY, name VARCHAR NOT NULL, "
+                "market VARCHAR NOT NULL, industry VARCHAR, holding TEXT)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO stocks (symbol, name, market, industry, holding) "
+                "VALUES ('SH.688268', '华特气体', 'a_share', '电子特种气体', NULL)"
+            )
+        )
+
+    repository = StockRepository(engine)
+    existing = repository.get("SH.688268")
+    repository.upsert(existing.model_copy(update={"product_price_focus": ["氦气"]}))
+
+    assert repository.get("SH.688268").product_price_focus == ["氦气"]
 
 
 def test_yaml_import_validates_all_rows_before_persisting(tmp_path: Path) -> None:

@@ -22,7 +22,7 @@ does not place trades.
   data gap and a partial report. Do not copy a hostname, URL, proxy detail, or raw network error
   into the research input, report, or local-run note.
 - Research only the active configured A-share, Beijing Stock Exchange (BSE), and Hong Kong subjects. Query the SQLite-backed persisted active stock list, not a YAML configuration file.
-- The existing local application-service invocation below reads the same app home and repository used by `DailyRunService` and emits active symbol, name, market, industry, and optional holding-risk context:
+- The existing local application-service invocation below reads the same app home and repository used by `DailyRunService` and emits active symbol, name, market, industry, `product_price_focus`, and optional holding-risk context:
 
   ```powershell
   python -c 'from stock_research.cli import active_stock_context; import json; print(json.dumps(active_stock_context(), ensure_ascii=False))'
@@ -56,7 +56,7 @@ must be Simplified Chinese. Preserve the source title and URL exactly as supplie
 
 ## Research procedure
 
-1. Read every active configured symbol, name, market, industry, and holding context. Cover every
+1. Read every active configured symbol, name, market, industry, `product_price_focus`, and holding context. Cover every
    configured market: A-share (`SH.` / `SZ.`), Beijing Stock Exchange (`BJ.`), and Hong Kong (`HK.`), when present.
 2. Resolve each market's completed session by `run_slot`. For `pre_market`, use the last completed
    trading session before the report date. For `post_market`, a confirmed trading market may set `completed_session` and `data_as_of` to `report_date` with `is_closed` set to `false`. For `post_market`, a holiday/non-trading market or an unverified close or completed daily data must use the last verifiable prior session. Record one `market_sessions` entry for each configured
@@ -77,6 +77,15 @@ must be Simplified Chinese. Preserve the source title and URL exactly as supplie
    - Chinese, Hong Kong, or other applicable policy and regulatory developments;
    - US peers, US market drivers, and international transmission channels that could affect
      the subject or its industry.
+   For every nonempty `product_price_focus`（产品价格关注项）, research each listed product as a mandatory subtopic
+   of `product_price_summary`. State the quoted product specification, market/region and unit when
+   available; the latest verifiable price and date; a comparable prior price or percentage change
+   when available; supply/demand drivers; and the plausible transmission to the configured company.
+   Do not infer a price from a rumor, an equity-price move, or an unrelated gas grade. When no
+   verifiable current quotation exists, write a Simplified-Chinese data gap for that product rather
+   than manufacturing a price or change. For the configured `氦气` focus, search both domestic
+   high-purity/bulk helium sources and international supply developments, then distinguish the
+   quoted grade, region, unit, and date before comparing prices.
 5. For every material claim, retain an evidence record with its title, URL, source name,
    publication time, retrieval time, direction, credibility, category, summary, and affected
    symbol. Use `null` for an unavailable publication time. `credibility` is `3` for a primary source, `2` for a reputable

@@ -42,6 +42,7 @@ _FIELD_LABELS = {
     "name": "股票名称",
     "market": "市场",
     "industry": "所属行业",
+    "product_price_focus": "产品价格关注项",
     "holding": "持仓",
     "quantity": "持仓数量",
     "cost_basis": "持仓成本",

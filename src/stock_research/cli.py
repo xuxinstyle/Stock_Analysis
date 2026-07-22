@@ -83,6 +83,7 @@ def active_stock_context(home: Path | None = None) -> list[dict[str, object]]:
                 "name": stock.name,
                 "market": stock.market.value,
                 "industry": stock.industry,
+                "product_price_focus": stock.product_price_focus,
                 "holding": (
                     None
                     if holding is None

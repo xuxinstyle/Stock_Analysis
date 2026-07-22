@@ -171,6 +171,12 @@ promises. Before acting on any report, read its **来源与数据缺口** (sourc
 open the cited sources, check the run warnings and market dates, and account for any conflicting or
 unverified claims. A `partial` report must not be read as complete coverage.
 
+Each stock may optionally set `product_price_focus` in YAML, or use the stock-configuration page
+to enter comma-separated items. The automatic researcher must cover every configured item in the
+product-price section with a dated, source-linked price/change and supply-demand analysis, or an
+explicit Simplified-Chinese data gap. For example, set `氦气` for 华特气体 when helium pricing is a
+material research driver.
+
 Recommendation citations are time-scoped to the latest completed trading day: short horizon uses
 only the most recent 5 calendar days, medium horizon the most recent 3 calendar months, and long
 horizon the most recent 2 calendar years. Evidence publication time and event occurrence time are

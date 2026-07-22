@@ -15,6 +15,7 @@ stocks = Table(
     Column("name", String, nullable=False),
     Column("market", String, nullable=False),
     Column("industry", String, nullable=True),
+    Column("product_price_focus", Text, nullable=True),
     Column("holding", Text, nullable=True),
 )
 
@@ -28,6 +29,8 @@ class StockRepository:
         self.engine = engine
         if initialize:
             metadata.create_all(engine)
+            self._migrate_product_price_focus_column()
+        self._has_product_price_focus = self._table_has_product_price_focus_column()
 
     def upsert(self, stock: StockConfig) -> StockConfig:
         values = {
@@ -35,6 +38,7 @@ class StockRepository:
             "name": stock.name,
             "market": stock.market.value,
             "industry": stock.industry,
+            "product_price_focus": self._serialize_product_price_focus(stock),
             "holding": self._serialize_holding(stock),
         }
         statement = insert(stocks).values(**values)
@@ -52,6 +56,7 @@ class StockRepository:
             "name": stock.name,
             "market": stock.market.value,
             "industry": stock.industry,
+            "product_price_focus": self._serialize_product_price_focus(stock),
             "holding": self._serialize_holding(stock),
         }
         try:
@@ -63,11 +68,13 @@ class StockRepository:
 
     def list_all(self) -> list[StockConfig]:
         with self.engine.connect() as connection:
-            rows = connection.execute(select(stocks).order_by(text("rowid"))).mappings().all()
+            rows = (
+                connection.execute(self._select_stocks().order_by(text("rowid"))).mappings().all()
+            )
         return [self._deserialize_stock(dict(row)) for row in rows]
 
     def get(self, symbol: str) -> StockConfig | None:
-        statement = select(stocks).where(stocks.c.symbol == symbol)
+        statement = self._select_stocks().where(stocks.c.symbol == symbol)
         with self.engine.connect() as connection:
             row = connection.execute(statement).mappings().one_or_none()
         return None if row is None else self._deserialize_stock(dict(row))
@@ -85,6 +92,7 @@ class StockRepository:
                 "name": stock.name,
                 "market": stock.market.value,
                 "industry": stock.industry,
+                "product_price_focus": self._serialize_product_price_focus(stock),
                 "holding": self._serialize_holding(stock),
             }
             for stock in values
@@ -102,8 +110,37 @@ class StockRepository:
         return json.dumps(stock.holding.model_dump(mode="json"))
 
     @staticmethod
+    def _serialize_product_price_focus(stock: StockConfig) -> str | None:
+        return json.dumps(stock.product_price_focus, ensure_ascii=False) or None
+
+    def _migrate_product_price_focus_column(self) -> None:
+        if self._table_has_product_price_focus_column():
+            return
+        with self.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE stocks ADD COLUMN product_price_focus TEXT"))
+
+    def _table_has_product_price_focus_column(self) -> bool:
+        with self.engine.connect() as connection:
+            columns = connection.execute(text("PRAGMA table_info(stocks)")).mappings().all()
+        return any(column["name"] == "product_price_focus" for column in columns)
+
+    def _select_stocks(self):
+        if self._has_product_price_focus:
+            return select(stocks)
+        return select(
+            stocks.c.symbol,
+            stocks.c.name,
+            stocks.c.market,
+            stocks.c.industry,
+            stocks.c.holding,
+        )
+
+    @staticmethod
     def _deserialize_stock(row: dict[str, str | None]) -> StockConfig:
         holding = row.pop("holding")
         if holding is not None:
             row["holding"] = json.loads(holding)
+        product_price_focus = row.pop("product_price_focus", None)
+        if product_price_focus is not None:
+            row["product_price_focus"] = json.loads(product_price_focus)
         return StockConfig.model_validate(row)

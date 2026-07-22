@@ -375,6 +375,7 @@ def test_active_stock_context_includes_industry_and_optional_holding_risk_profil
     a_share = next(stock for stock in context if stock["symbol"] == "SH.600000")
     no_holding = next(stock for stock in context if stock["symbol"] == "SZ.000001")
     assert a_share["industry"]
+    assert a_share["product_price_focus"] == ["氦气"]
     assert a_share["holding"]["risk_profile"] == "balanced"
     assert no_holding["industry"] is None
     assert no_holding["holding"] is None
@@ -403,12 +404,48 @@ def test_active_stock_context_reads_existing_configuration_without_creating_arti
             "name": "Example A Share",
             "market": "a_share",
             "industry": "Banking",
+            "product_price_focus": [],
             "holding": None,
         }
     ]
     assert {path.relative_to(home) for path in home.rglob("*")} == before
     assert not (home / "reports").exists()
     assert not (home / "data" / "runs.sqlite3").exists()
+
+
+def test_active_stock_context_reads_legacy_configuration_without_migrating_it(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "legacy-app-home"
+    engine = create_engine_at(home / "data" / "stock_research.sqlite3")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE stocks (symbol VARCHAR PRIMARY KEY, name VARCHAR NOT NULL, "
+            "market VARCHAR NOT NULL, industry VARCHAR, holding TEXT)"
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO stocks (symbol, name, market, industry, holding) VALUES "
+            "('SH.688268', '华特气体', 'a_share', '电子特种气体', NULL)"
+        )
+
+    context = active_stock_context(home)
+
+    assert context == [
+        {
+            "symbol": "SH.688268",
+            "name": "华特气体",
+            "market": "a_share",
+            "industry": "电子特种气体",
+            "product_price_focus": [],
+            "holding": None,
+        }
+    ]
+    with engine.connect() as connection:
+        column_names = {
+            row["name"]
+            for row in connection.exec_driver_sql("PRAGMA table_info(stocks)").mappings().all()
+        }
+    assert "product_price_focus" not in column_names
 
 
 @pytest.mark.parametrize("create_empty_home", [False, True])

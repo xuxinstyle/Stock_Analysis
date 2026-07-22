@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -33,6 +34,7 @@ class StockForm(BaseModel):
     name: str
     market: str
     industry: str | None = None
+    product_price_focus: str | None = None
     quantity: str | None = None
     cost_basis: str | None = None
     cash_available: str | None = None
@@ -45,6 +47,7 @@ class StockForm(BaseModel):
 
     @field_validator(
         "industry",
+        "product_price_focus",
         "quantity",
         "cost_basis",
         "cash_available",
@@ -74,9 +77,15 @@ class StockForm(BaseModel):
                 "name": self.name,
                 "market": self.market,
                 "industry": self.industry,
+                "product_price_focus": self._product_price_focus_items(),
                 "holding": holding,
             }
         )
+
+    def _product_price_focus_items(self) -> list[str]:
+        if self.product_price_focus is None:
+            return []
+        return [item for item in re.split(r"[,，;；\n]+", self.product_price_focus) if item]
 
 
 WEB_ROOT = Path(__file__).parent
@@ -281,6 +290,7 @@ def _stock_form_values(stock: StockConfig) -> dict[str, str]:
         "name": stock.name,
         "market": stock.market.value,
         "industry": stock.industry or "",
+        "product_price_focus": "，".join(stock.product_price_focus),
         "quantity": str(holding.quantity) if holding else "",
         "cost_basis": str(holding.cost_basis) if holding else "",
         "cash_available": (
@@ -296,6 +306,7 @@ def _localized_errors(error: ValidationError) -> dict[str, str]:
         "name": "股票名称",
         "market": "市场",
         "industry": "行业",
+        "product_price_focus": "产品价格关注项",
         "quantity": "持仓数量",
         "cost_basis": "持仓成本",
         "cash_available": "可用资金",

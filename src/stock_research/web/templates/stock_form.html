@@ -25,6 +25,10 @@
           <input name="industry" value="{{ values.get('industry', '') }}">
           {% if errors.industry %}<span class="field-error" data-field="industry">{{ errors.industry }}</span>{% endif %}
         </label>
+        <label>产品价格关注项（可选）
+          <input name="product_price_focus" value="{{ values.get('product_price_focus', '') }}" placeholder="例如：氦气，氖气">
+          {% if errors.product_price_focus %}<span class="field-error" data-field="product_price_focus">{{ errors.product_price_focus }}</span>{% endif %}
+        </label>
       </div>
     </fieldset>
     <fieldset>

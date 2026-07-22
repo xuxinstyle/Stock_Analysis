@@ -9,13 +9,14 @@
     {% if stocks %}
       <div class="table-scroll">
         <table>
-          <thead><tr><th>股票</th><th>市场</th><th>行业</th><th>持仓</th><th>操作</th></tr></thead>
+          <thead><tr><th>股票</th><th>市场</th><th>行业</th><th>产品价格关注项</th><th>持仓</th><th>操作</th></tr></thead>
           <tbody>
           {% for stock in stocks %}
             <tr>
               <td><strong>{{ stock.symbol }}</strong><br><span class="muted">{{ stock.name }}</span></td>
               <td>{{ stock.market.value }}</td>
               <td>{{ stock.industry or "未填写" }}</td>
+              <td>{{ stock.product_price_focus|join("；") or "未填写" }}</td>
               <td>{% if stock.holding %}{{ stock.holding.quantity }} @ {{ stock.holding.cost_basis }}{% else %}未填写{% endif %}</td>
               <td class="actions">
                 <a href="/stocks/{{ stock.symbol }}/edit">编辑</a>

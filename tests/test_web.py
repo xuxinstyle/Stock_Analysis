@@ -252,6 +252,19 @@ def test_domain_models_are_the_canonical_market_holding_and_risk_validators() ->
         form.to_stock()
 
 
+def test_stock_form_parses_product_price_focus_items() -> None:
+    form = StockForm.model_validate(
+        {
+            "symbol": "SH.688268",
+            "name": "华特气体",
+            "market": "a_share",
+            "product_price_focus": "氦气， 氖气,氦气",
+        }
+    )
+
+    assert form.to_stock().product_price_focus == ["氦气", "氖气"]
+
+
 def test_edit_stock_persists_validated_holding_and_blank_holding_options(
     client: TestClient,
 ) -> None:

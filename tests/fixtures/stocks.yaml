@@ -3,6 +3,8 @@ stocks:
     name: 浦发银行
     market: a_share
     industry: 银行
+    product_price_focus:
+      - 氦气
     holding:
       quantity: "100"
       cost_basis: "10.50"
