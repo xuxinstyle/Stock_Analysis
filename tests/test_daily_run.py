@@ -120,9 +120,14 @@ def test_daily_research_prompt_has_explicit_pre_and_post_market_modes() -> None:
         "`data_as_of` to `report_date` with `is_closed` set to `false`."
     ) in prompt
     assert (
-        "For `post_market`, a holiday/non-trading market or an unverified close, daily data, "
-        "or event must use the last verifiable prior session."
+        "For `post_market`, a holiday/non-trading market or an unverified close or completed daily "
+        "data must use the last verifiable prior session."
     ) in prompt
+    assert (
+        "An unverified or conflicting event must remain an explicit Simplified Chinese event/research "
+        "data gap and must not change a confirmed `post_market` same-day session with verified daily data."
+    ) in prompt
+    assert "or an unverified close, daily data, or event must use the last verifiable prior session" not in prompt
     assert "last completed trading session before the run" not in prompt
     assert "<app-home>/reports/YYYY-MM-DD/<slot>/" not in readme
     assert "<app-home>/reports/YYYY-MM-DD/pre-market/" in readme

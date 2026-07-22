@@ -46,9 +46,10 @@ or infer it from the clock.
   `completed_session` and `data_as_of` equal the report date. Cover that day's close, price
   change, volume, technical context, and intraday/post-market events. In all auto-generated prose,
   write the corresponding descriptions as Simplified Chinese: 当天收盘、涨跌、成交量、技术面，以及盘中和盘后事件。
-- Safe fallback: if same-day closing status, completed daily data, or an event cannot be verified,
+- Safe session fallback: if same-day closing status or completed daily data cannot be verified,
   retain a Simplified Chinese data-gap explanation, use the last verifiable session, and do not
   claim same-day completed coverage. 保留数据缺口，并使用最后可验证会话。
+- Event fallback: An unverified or conflicting event must remain an explicit Simplified Chinese event/research data gap and must not change a confirmed `post_market` same-day session with verified daily data. 未核实或存在冲突的事件必须保留为明确的简体中文事件或研究数据缺口，不得改变已确认收市且日线数据已核实的当日会话。
 
 For either mode, auto-generated research summaries, event descriptions, and data-gap explanations
 must be Simplified Chinese. Preserve the source title and URL exactly as supplied by the source.
@@ -58,7 +59,7 @@ must be Simplified Chinese. Preserve the source title and URL exactly as supplie
 1. Read every active configured symbol, name, market, industry, and holding context. Cover every
    configured market: A-share (`SH.` / `SZ.`), Beijing Stock Exchange (`BJ.`), and Hong Kong (`HK.`), when present.
 2. Resolve each market's completed session by `run_slot`. For `pre_market`, use the last completed
-   trading session before the report date. For `post_market`, a confirmed trading market may set `completed_session` and `data_as_of` to `report_date` with `is_closed` set to `false`. For `post_market`, a holiday/non-trading market or an unverified close, daily data, or event must use the last verifiable prior session. Record one `market_sessions` entry for each configured
+   trading session before the report date. For `post_market`, a confirmed trading market may set `completed_session` and `data_as_of` to `report_date` with `is_closed` set to `false`. For `post_market`, a holiday/non-trading market or an unverified close or completed daily data must use the last verifiable prior session. Record one `market_sessions` entry for each configured
    market with its `completed_session` and `is_closed` status on the report date. Set `is_closed`
    to `true` only for a market that did not trade on the report date. A closed market must use its
    last verifiable prior session. Label holidays, suspensions, delayed quotes, and unavailable data
