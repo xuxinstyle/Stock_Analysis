@@ -19,6 +19,27 @@ python -m pip install -e '.[dev]'
 The `stock-research` launcher is installed into the active environment. If it is not on `PATH`,
 use `.\.venv\Scripts\stock-research.exe` on Windows or `.venv/bin/stock-research` on macOS/Linux.
 
+## Feishu report notification
+
+Every successful `stock-research generate --input ...` saves the JSON, Markdown, and HTML report
+first, then sends the complete Markdown report to a locally configured Feishu V2 custom-bot
+Webhook. This includes manual runs and repeat runs. The Webhook is read only from the user-level
+`STOCK_RESEARCH_FEISHU_WEBHOOK_URL` environment variable and is never stored in this repository.
+
+On Windows, configure it without placing the URL in a source or configuration file:
+
+```powershell
+[Environment]::SetEnvironmentVariable('STOCK_RESEARCH_FEISHU_WEBHOOK_URL', '<your-feishu-v2-webhook>', 'User')
+```
+
+Restart the Codex App or terminal after setting the variable so future local automation processes
+inherit it. Feishu's single V2 request-body limit is 20KB; the application uses a conservative
+18KiB limit and sends an overlong report as numbered UTF-8-safe text segments. If a notification
+fails, the report remains saved and its original run record remains available, but `generate`
+returns a nonzero status and identifies the failed notification segment. Correct the local
+environment setting or webhook availability, then explicitly run `generate` again; the report is
+sent again rather than silently retried.
+
 ## First configuration
 
 Create an editable YAML configuration, review its sample A-share, BSE, Hong Kong, industry, and

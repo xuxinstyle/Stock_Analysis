@@ -51,6 +51,8 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
         "json.dumps(active_stock_context(), ensure_ascii=False)",
         "stock-research validate-input",
         "stock-research generate --input",
+        "STOCK_RESEARCH_FEISHU_WEBHOOK_URL",
+        "Feishu",
         "Prefer primary sources",
         "exchange/company disclosures",
         "price and volume context",
@@ -82,6 +84,7 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
     assert "stock-research report YYYY-MM-DD" in readme
     assert "market_sessions" in readme
     assert "closed" in readme
+    assert "STOCK_RESEARCH_FEISHU_WEBHOOK_URL" in readme
     assert "$env:STOCK_RESEARCH_HOME/config/stocks.yaml" not in readme
     assert ".stock-research/config/stocks.yaml" not in readme
 
@@ -111,6 +114,7 @@ def test_fixture_payload_can_be_validated_then_generated_by_cli(
 ) -> None:
     monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
     monkeypatch.setattr("stock_research.cli.AkShareMarketDataProvider", OfflineMarketDataProvider)
+    monkeypatch.setattr("stock_research.cli._notify_generated_report", lambda paths, report_date: 1)
     request_path = TEST_DATA_DIR / "daily_research_request.json"
 
     assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0

@@ -135,6 +135,14 @@ never directly determine a buy, reduce, or avoid view. Never invent citations.
    with invented content.
 3. Generate the local report only after validation succeeds:
 
+   Before this step, ensure the local automation process has a user-level
+   `STOCK_RESEARCH_FEISHU_WEBHOOK_URL` environment variable configured for the Feishu V2 custom
+   robot. Never print, write, request, or embed the Webhook value in this prompt, a report, source
+   code, configuration, or the local-run note. `generate` saves the report first and then sends its
+   complete Markdown content to Feishu; it safely numbers and splits overlong content. If that
+   notification fails, keep the saved report, record the failure, and do not invent a successful
+   delivery.
+
    ```powershell
    stock-research generate --input .\.stock-research\input\daily-research-request-YYYY-MM-DD.json
    ```

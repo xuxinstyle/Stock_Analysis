@@ -54,6 +54,24 @@ def test_send_markdown_posts_one_v2_text_payload() -> None:
     ]
 
 
+def test_rejects_non_feishu_or_non_v2_webhook_urls() -> None:
+    with pytest.raises(FeishuNotificationError, match="HTTPS V2"):
+        FeishuNotificationService("https://example.com/open-apis/bot/v2/hook/token")
+    with pytest.raises(FeishuNotificationError, match="HTTPS V2"):
+        FeishuNotificationService("https://open.feishu.cn/open-apis/bot/hook/token")
+
+
+def test_send_rejects_a_feishu_business_error() -> None:
+    service = FeishuNotificationService(
+        "https://open.feishu.cn/open-apis/bot/v2/hook/test-token",
+        post=lambda url, **kwargs: FakeResponse(200, {"StatusCode": 11232}),
+        sleep=lambda seconds: None,
+    )
+
+    with pytest.raises(FeishuNotificationError, match="service rejected request"):
+        service.send_markdown(date(2026, 7, 22), "# 完整报告")
+
+
 def test_split_preserves_chinese_emoji_and_keeps_each_payload_under_limit() -> None:
     markdown = "研究😀\n" * 8_000
 

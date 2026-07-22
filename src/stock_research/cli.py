@@ -18,9 +18,13 @@ from stock_research.repositories.runs import RunRepository
 from stock_research.repositories.stocks import StockRepository
 from stock_research.services.configuration import ConfigurationService
 from stock_research.services.daily_run import DailyRunService
+from stock_research.services.feishu_notifications import (
+    FeishuNotificationError,
+    FeishuNotificationService,
+)
 from stock_research.services.market_data import AkShareMarketDataProvider
 from stock_research.services.report_builder import ReportBuilder
-from stock_research.services.report_store import ReportStore
+from stock_research.services.report_store import ReportPaths, ReportStore
 
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
@@ -109,6 +113,11 @@ def load_daily_request(input_path: Path) -> DailyRunRequest:
         raise typer.BadParameter(f"invalid daily research request: {error}") from error
 
 
+def _notify_generated_report(paths: ReportPaths, report_date: date) -> int:
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    return FeishuNotificationService.from_environment().send_markdown(report_date, markdown)
+
+
 @app.command("init")
 def init(
     output_path: Annotated[Path | None, typer.Argument()] = None,
@@ -162,7 +171,19 @@ def generate(
     except (OSError, ValidationError, ValueError, RuntimeError) as error:
         typer.echo(f"report generation failed: {error}", err=True)
         raise typer.Exit(code=1)
-    typer.echo(f"JSON: {paths.json}\nMarkdown: {paths.markdown}\nHTML: {paths.html}")
+    try:
+        segments = _notify_generated_report(paths, report.report_date)
+    except (OSError, FeishuNotificationError) as error:
+        typer.echo(
+            "report generated, but Feishu notification failed: "
+            f"{error}\nJSON: {paths.json}\nMarkdown: {paths.markdown}\nHTML: {paths.html}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    typer.echo(
+        f"JSON: {paths.json}\nMarkdown: {paths.markdown}\nHTML: {paths.html}\n"
+        f"Feishu: {segments} segment(s) sent"
+    )
 
 
 @app.command("reports")

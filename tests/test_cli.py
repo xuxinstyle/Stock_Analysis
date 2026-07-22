@@ -7,11 +7,13 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
+import stock_research.cli as cli
 from stock_research.cli import active_stock_context, app, build_services
 from stock_research.db import create_engine_at
 from stock_research.domain.enums import Market, RunStatus
 from stock_research.domain.models import DailyReport, DailyRunRequest, StockConfig
 from stock_research.repositories.stocks import StockRepository
+from stock_research.services.feishu_notifications import FeishuNotificationError
 from stock_research.services.report_store import ReportStore
 
 from test_report_builder import FakeMarketData
@@ -19,6 +21,11 @@ from test_report_builder import FakeMarketData
 
 TEST_DATA_DIR = Path(__file__).parent / "fixtures"
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def suppress_feishu_notification(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "_notify_generated_report", lambda paths, report_date: 1)
 
 
 def test_validate_input_prints_the_research_date() -> None:
@@ -72,6 +79,54 @@ def test_generate_writes_three_formats_without_network_requests(
     assert (tmp_path / "reports" / "2026-07-21" / "report.json").exists()
     assert (tmp_path / "reports" / "2026-07-21" / "report.md").exists()
     assert (tmp_path / "reports" / "2026-07-21" / "report.html").exists()
+
+
+def test_generate_saves_report_then_notifies_for_manual_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    monkeypatch.setattr("stock_research.cli.AkShareMarketDataProvider", lambda: FakeMarketData())
+    assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
+    sent_markdown: list[str] = []
+
+    def notify(paths, report_date: date) -> int:
+        assert report_date == date(2026, 7, 21)
+        sent_markdown.append(paths.markdown.read_text(encoding="utf-8"))
+        return 1
+
+    monkeypatch.setattr(cli, "_notify_generated_report", notify, raising=False)
+
+    result = runner.invoke(
+        app, ["generate", "--input", str(TEST_DATA_DIR / "daily_research_request.json")]
+    )
+
+    assert result.exit_code == 0
+    assert sent_markdown == [
+        (tmp_path / "reports" / "2026-07-21" / "report.md").read_text(encoding="utf-8")
+    ]
+    assert "Feishu: 1 segment(s) sent" in result.stdout
+
+
+def test_generate_keeps_saved_report_when_feishu_notification_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STOCK_RESEARCH_HOME", str(tmp_path))
+    monkeypatch.setattr("stock_research.cli.AkShareMarketDataProvider", lambda: FakeMarketData())
+    assert runner.invoke(app, ["import-config", str(TEST_DATA_DIR / "stocks.yaml")]).exit_code == 0
+
+    def fail_notification(paths, report_date: date) -> int:
+        raise FeishuNotificationError("STOCK_RESEARCH_FEISHU_WEBHOOK_URL must be configured")
+
+    monkeypatch.setattr(cli, "_notify_generated_report", fail_notification, raising=False)
+
+    result = runner.invoke(
+        app, ["generate", "--input", str(TEST_DATA_DIR / "daily_research_request.json")]
+    )
+
+    assert result.exit_code == 1
+    assert (tmp_path / "reports" / "2026-07-21" / "report.md").exists()
+    assert "notification failed" in result.stderr
+    assert "STOCK_RESEARCH_FEISHU_WEBHOOK_URL" in result.stderr
 
 
 def test_generate_persists_the_report_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
