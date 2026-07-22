@@ -151,6 +151,7 @@ def test_research_input_accepts_current_beijing_subject_symbol() -> None:
         "news_summary",
         "international_summary",
         "product_price_summary",
+        "recent_price_move_summary",
     ],
 )
 def test_research_input_requires_each_summary(summary_name: str) -> None:
@@ -166,3 +167,11 @@ def test_research_input_preserves_events_as_a_list() -> None:
 
     assert isinstance(research_input.events, list)
     assert research_input.events[0].title == "Example disclosure event"
+
+
+def test_research_input_preserves_recent_price_move_summary() -> None:
+    payload = valid_research_payload()
+    summary = "近五个完整交易日上涨；已证实驱动见引用，行业联动仅为推断。"
+    payload["recent_price_move_summary"] = summary
+
+    assert StockResearchInput.model_validate(payload).recent_price_move_summary == summary

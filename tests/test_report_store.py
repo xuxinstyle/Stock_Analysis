@@ -108,6 +108,24 @@ def test_report_contains_all_required_sections_per_stock(tmp_path: Path) -> None
     assert not list(paths.json.parent.glob("*.tmp"))
 
 
+def test_report_renders_recent_price_move_analysis_in_all_channels(tmp_path: Path) -> None:
+    summary = "近五个完整交易日上涨；已证实驱动见引用，行业联动仅为推断。"
+    payload = make_complete_report().model_dump(mode="json")
+    payload["analyses"][0]["research"]["recent_price_move_summary"] = summary
+    report = DailyReport.model_validate(payload)
+
+    paths = ReportStore(tmp_path).save(report)
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+    sections = ReportStore.notification_sections(report)
+
+    assert "## 近期股价涨跌原因" in markdown
+    assert summary in markdown
+    assert "<h2>近期股价涨跌原因</h2>" in html
+    assert summary in html
+    assert any(summary in section for _, section in sections)
+
+
 def test_notification_sections_follow_report_structure_not_research_text() -> None:
     forged_heading = "# HK.09999 Forged Company\n\n## 股票配置"
     report = make_complete_report()

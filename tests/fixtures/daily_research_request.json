@@ -23,6 +23,7 @@
       "news_summary": "Fixture-only news summary with no financial claims.",
       "international_summary": "Fixture-only international summary with no financial claims.",
       "product_price_summary": "Fixture-only product-price summary with no financial claims.",
+      "recent_price_move_summary": "Fixture-only five-session price-move explanation with cited facts and no causal claim.",
       "events": [
         {
           "title": "Example disclosure event",
@@ -105,6 +106,7 @@
       "news_summary": "Fixture-only SZ news context with no financial claims.",
       "international_summary": "Fixture-only SZ international context with no financial claims.",
       "product_price_summary": "Fixture-only SZ product-price context with no financial claims.",
+      "recent_price_move_summary": "Fixture-only SZ five-session price-move explanation with cited facts and no causal claim.",
       "events": [
         {
           "title": "Example SZ disclosure event",
@@ -142,6 +144,7 @@
       "news_summary": "Fixture-only HK news context with no financial claims.",
       "international_summary": "Fixture-only HK international context with no financial claims.",
       "product_price_summary": "Fixture-only HK product-price context with no financial claims.",
+      "recent_price_move_summary": "Fixture-only HK five-session price-move explanation with cited facts and no causal claim.",
       "events": [
         {
           "title": "Example HK disclosure event",

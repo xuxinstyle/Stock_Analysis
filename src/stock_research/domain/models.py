@@ -173,6 +173,7 @@ class StockResearchInput(BaseModel):
     news_summary: str
     international_summary: str
     product_price_summary: str
+    recent_price_move_summary: str = "数据缺口：未提供近期股价涨跌的可引用原因分析。"
     events: list[EventSignal]
     evidence: list[Evidence]
 
@@ -190,6 +191,7 @@ class StockResearchInput(BaseModel):
         "news_summary",
         "international_summary",
         "product_price_summary",
+        "recent_price_move_summary",
     )
     @classmethod
     def require_non_blank_summary(cls, value: str) -> str:

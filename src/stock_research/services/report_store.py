@@ -111,6 +111,7 @@ _FIELD_LABELS = {
     "news_summary": "消息摘要",
     "international_summary": "国际传导摘要",
     "product_price_summary": "产品价格摘要",
+    "recent_price_move_summary": "近期股价涨跌原因",
     "events": "突发事件",
     "evidence": "证据",
 }
@@ -452,6 +453,13 @@ class ReportStore:
                 else "数据缺口：无可验证的已完成行情。"
             ),
             *ReportStore._markdown_structured_fields(previous),
+            "",
+            "## 近期股价涨跌原因",
+            (
+                research.recent_price_move_summary
+                if research
+                else "数据缺口：缺少研究输入，无法说明近期股价涨跌原因。"
+            ),
             "",
             "## 基本面分析",
             research.fundamental_summary if research else "数据缺口：缺少研究输入。",

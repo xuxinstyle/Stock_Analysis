@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -95,6 +96,18 @@ def test_daily_research_prompt_requires_cited_safe_local_handoff() -> None:
     assert "STOCK_RESEARCH_FEISHU_WEBHOOK_URL" in readme
     assert "$env:STOCK_RESEARCH_HOME/config/stocks.yaml" not in readme
     assert ".stock-research/config/stocks.yaml" not in readme
+
+
+def test_daily_research_prompt_requires_recent_price_move_reasoning() -> None:
+    prompt = DAILY_RESEARCH_PROMPT.read_text(encoding="utf-8")
+    fixture = json.loads(
+        (TEST_DATA_DIR / "daily_research_request.json").read_text(encoding="utf-8")
+    )
+
+    assert "recent_price_move_summary" in prompt
+    assert "最近五个完整交易日" in prompt
+    assert "不得将市场联动表述为公司事实" in prompt
+    assert fixture["research_inputs"][0]["recent_price_move_summary"]
 
 
 def test_daily_research_prompt_has_explicit_pre_and_post_market_modes() -> None:

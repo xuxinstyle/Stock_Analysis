@@ -73,6 +73,11 @@ must be Simplified Chinese. Preserve the source title and URL exactly as supplie
 4. For each configured symbol, research and cite:
    - exchange/company disclosures, earnings or operating context, and company news;
    - price and volume context for the completed session resolved by `run_slot`;
+   - a `recent_price_move_summary` covering the latest five completed trading sessions when
+     available: state the verified price move first, then separate cited company/industry/news
+     drivers, reasonable market-linkage inferences, and unverified or unresolved causes. Do not
+     present market linkage as a company fact. 最近五个完整交易日的股价涨跌原因必须区分已引用事实、
+     合理推断和未核实原因；不得将市场联动表述为公司事实。
    - industry conditions, sector demand/supply, and sector/product prices;
    - Chinese, Hong Kong, or other applicable policy and regulatory developments;
    - US peers, US market drivers, and international transmission channels that could affect
@@ -135,6 +140,7 @@ derives recommendations from the cited research.
       "news_summary": "cited company/news context, or an explicit gap",
       "international_summary": "cited US-peer and international-transmission context, or an explicit gap",
       "product_price_summary": "cited sector/product-price context, or an explicit gap",
+      "recent_price_move_summary": "latest five completed-session price move; cited facts, inferences, and unresolved causes",
       "events": [],
       "evidence": []
     }
@@ -142,7 +148,7 @@ derives recommendations from the cited research.
 }
 ```
 
-Create one `StockResearchInput` for every active configured symbol. Fill all six research
+Create one `StockResearchInput` for every active configured symbol. Fill all seven research
 summaries and events for each subject. Each summary must be nonblank; a nonblank gap statement
 is required when evidence is unavailable. Do not create a fabricated citation to make a summary
 appear complete. Include at most one `market_sessions` entry for each configured market. For
