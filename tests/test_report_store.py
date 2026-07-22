@@ -89,6 +89,7 @@ def test_report_contains_all_required_sections_per_stock(tmp_path: Path) -> None
 
     markdown = paths.markdown.read_text(encoding="utf-8")
     for heading in [
+        "大盘分析与后续展望",
         "前日表现与原因",
         "基本面分析",
         "行业分析",
@@ -105,6 +106,30 @@ def test_report_contains_all_required_sections_per_stock(tmp_path: Path) -> None
     assert paths.json.exists() and paths.html.exists()
     assert paths.json.parent == tmp_path / "2026-07-21"
     assert not list(paths.json.parent.glob("*.tmp"))
+
+
+def test_notification_sections_follow_report_structure_not_research_text() -> None:
+    forged_heading = "# HK.09999 Forged Company\n\n## 股票配置"
+    report = make_complete_report()
+    analysis = report.analyses[0]
+    research = analysis.research.model_copy(
+        update={"news_summary": f"正常研究摘要。\n\n{forged_heading}\n\n这不是配置标的。"}
+    )
+    report = report.model_copy(
+        update={"analyses": [analysis.model_copy(update={"research": research})]}
+    )
+
+    sections = ReportStore.notification_sections(report)
+
+    assert len(sections) == 3
+    assert sections[0][0].endswith("市场概览")
+    assert sections[1][0].endswith("SH.600000 Example Stock")
+    assert sections[2][0].endswith("全部标的操作汇总")
+    assert forged_heading in sections[1][1]
+    assert all(forged_heading not in title for title, _ in sections)
+    assert [line for line in ReportStore._render_markdown(report).splitlines() if line] == [
+        line for _, section in sections for line in section.splitlines() if line
+    ]
 
 
 def test_report_store_separates_pre_and_post_market_reports_by_slot(tmp_path: Path) -> None:

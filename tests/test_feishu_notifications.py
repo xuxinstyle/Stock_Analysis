@@ -22,6 +22,28 @@ class FakeResponse:
         return self.payload
 
 
+def _two_company_sections(markdown: str) -> list[tuple[str, str]]:
+    overview, first_company = markdown.split("\n# SZ.002594", maxsplit=1)
+    first_company, second_company = first_company.split("\n# SH.688268", maxsplit=1)
+    second_company, aggregate_summary = second_company.rsplit("\n##", maxsplit=1)
+    return [
+        ("股票研究报告 — 市场概览", overview),
+        ("股票研究报告 — SZ.002594 比亚迪", "# SZ.002594" + first_company),
+        ("股票研究报告 — SH.688268 华特气体", "# SH.688268" + second_company),
+        ("股票研究报告 — 全部标的操作汇总", "##" + aggregate_summary),
+    ]
+
+
+def _one_company_sections(markdown: str) -> list[tuple[str, str]]:
+    overview, company = markdown.split("\n# SZ.002594", maxsplit=1)
+    company, aggregate_summary = company.rsplit("\n##", maxsplit=1)
+    return [
+        ("股票研究报告 — 市场概览", overview),
+        ("股票研究报告 — SZ.002594 比亚迪", "# SZ.002594" + company),
+        ("股票研究报告 — 全部标的操作汇总", "##" + aggregate_summary),
+    ]
+
+
 def test_from_environment_rejects_missing_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("STOCK_RESEARCH_FEISHU_WEBHOOK_URL", raising=False)
 
@@ -93,7 +115,7 @@ A 股：已收盘。
 比亚迪和华特气体的汇总不发送到单家公司消息。
 """
 
-    assert service.send_report_sections(date(2026, 7, 22), markdown) == 4
+    assert service.send_report_sections(date(2026, 7, 22), _two_company_sections(markdown)) == 4
 
     texts = [payload["content"]["text"] for payload in posted]
     assert len(texts) == 4
@@ -145,7 +167,7 @@ A 股：已收盘。
 最终汇总。
 """
 
-    sent_segments = service.send_report_sections(date(2026, 7, 22), markdown)
+    sent_segments = service.send_report_sections(date(2026, 7, 22), _two_company_sections(markdown))
 
     texts = [payload["content"]["text"] for payload in posted]
     assert sleeps == [0.2] * (sent_segments - 1)
@@ -193,7 +215,7 @@ A 股：已收盘。
 这是最终汇总。
 """
 
-    assert service.send_report_sections(date(2026, 7, 22), markdown) == 4
+    assert service.send_report_sections(date(2026, 7, 22), _two_company_sections(markdown)) == 4
 
     texts = [payload["content"]["text"] for payload in posted]
     assert "这是假汇总标题，来自研究摘要。" in texts[1]
@@ -226,7 +248,7 @@ def test_send_report_sections_repeats_disclaimer_for_each_oversized_market_overv
         + "## 全部标的操作汇总\n汇总。\n"
     )
 
-    assert service.send_report_sections(date(2026, 7, 22), markdown) > 3
+    assert service.send_report_sections(date(2026, 7, 22), _one_company_sections(markdown)) > 3
 
     overview_texts = [
         payload["content"]["text"] for payload in posted if "市场概览" in payload["content"]["text"]

@@ -29,6 +29,11 @@ _FIELD_LABELS = {
     "generated_at": "生成时间",
     "run_status": "运行状态",
     "market_statuses": "市场状态",
+    "market_outlook": "大盘分析与后续展望",
+    "current_analysis": "当前大盘分析",
+    "upside_conditions": "上行情景条件",
+    "downside_conditions": "下行情景条件",
+    "watch_items": "后续观察项",
     "global_risks": "全局风险",
     "run_warnings": "运行警告",
     "analyses": "个股分析",
@@ -323,6 +328,44 @@ class ReportStore:
 
     @staticmethod
     def _render_markdown(report: DailyReport) -> str:
+        sections = [
+            "\n".join(ReportStore._markdown_overview(report)),
+            *("\n".join(ReportStore._markdown_analysis(analysis)) for analysis in report.analyses),
+            "\n".join(ReportStore._markdown_recommendation_summary(report.analyses)),
+        ]
+        return "\n".join(sections) + "\n"
+
+    @staticmethod
+    def notification_sections(report: DailyReport) -> list[tuple[str, str]]:
+        """Render Feishu sections from trusted report structure, never from research Markdown."""
+
+        title = "每日股票研究报告"
+        return [
+            (
+                f"{title} — 市场概览",
+                ReportStore._section_text(ReportStore._markdown_overview(report)),
+            ),
+            *[
+                (
+                    f"{title} — {analysis.stock.symbol} {analysis.stock.name}",
+                    ReportStore._section_text(ReportStore._markdown_analysis(analysis)),
+                )
+                for analysis in report.analyses
+            ],
+            (
+                f"{title} — 全部标的操作汇总",
+                ReportStore._section_text(
+                    ReportStore._markdown_recommendation_summary(report.analyses)
+                ),
+            ),
+        ]
+
+    @staticmethod
+    def _section_text(lines: list[str]) -> str:
+        return "\n".join(lines).strip() + "\n"
+
+    @staticmethod
+    def _markdown_overview(report: DailyReport) -> list[str]:
         lines = [
             f"# 每日股票研究报告 — {report.report_date.isoformat()}",
             "",
@@ -345,6 +388,21 @@ class ReportStore:
                 )
         else:
             lines.append("- 无已配置市场。")
+        lines.extend(
+            [
+                "",
+                "## 大盘分析与后续展望",
+                (
+                    f"- 数据截至：{report.market_outlook.data_as_of.isoformat()}"
+                    if report.market_outlook.data_as_of
+                    else "- 数据截至：不可用"
+                ),
+                f"- 当前大盘分析：{report.market_outlook.current_analysis}",
+                "- 上行情景条件：" + "；".join(report.market_outlook.upside_conditions),
+                "- 下行情景条件：" + "；".join(report.market_outlook.downside_conditions),
+                "- 后续观察项：" + "；".join(report.market_outlook.watch_items),
+            ]
+        )
         lines.extend(["", "## 全局风险"])
         lines.extend(
             f"- {ReportStore._display_value(risk, 'global_risks')}"
@@ -356,10 +414,7 @@ class ReportStore:
             for warning in report.run_warnings or ["无。"]
         )
 
-        for analysis in report.analyses:
-            lines.extend(ReportStore._markdown_analysis(analysis))
-        lines.extend(ReportStore._markdown_recommendation_summary(report.analyses))
-        return "\n".join(lines) + "\n"
+        return lines
 
     @staticmethod
     def _markdown_analysis(analysis: StockAnalysis) -> list[str]:

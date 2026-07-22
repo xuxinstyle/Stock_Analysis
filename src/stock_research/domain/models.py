@@ -197,12 +197,46 @@ class MarketSession(BaseModel):
     is_closed: bool
 
 
+class MarketOutlook(BaseModel):
+    """Evidence-bound broad-market analysis for the report's next-session outlook."""
+
+    data_as_of: date | None = None
+    current_analysis: str = "数据缺口：未提供可验证的当日大盘分析。"
+    upside_conditions: list[str] = Field(
+        default_factory=lambda: ["数据缺口：未提供可验证的上行情景与触发条件。"],
+        min_length=1,
+    )
+    downside_conditions: list[str] = Field(
+        default_factory=lambda: ["数据缺口：未提供可验证的下行情景与触发条件。"],
+        min_length=1,
+    )
+    watch_items: list[str] = Field(
+        default_factory=lambda: ["数据缺口：未提供可验证的后续观察指标。"],
+        min_length=1,
+    )
+
+    @field_validator("current_analysis")
+    @classmethod
+    def require_nonblank_current_analysis(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("market outlook current_analysis must not be blank")
+        return value
+
+    @field_validator("upside_conditions", "downside_conditions", "watch_items")
+    @classmethod
+    def require_nonblank_market_outlook_items(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() for item in value):
+            raise ValueError("market outlook entries must not be blank")
+        return value
+
+
 class DailyRunRequest(BaseModel):
     report_date: date
     run_slot: Literal["pre_market", "post_market"] | None = None
     generated_at: datetime
     research_inputs: list[StockResearchInput]
     market_sessions: list[MarketSession] = Field(default_factory=list)
+    market_outlook: MarketOutlook = Field(default_factory=MarketOutlook)
 
     @model_validator(mode="after")
     def validate_market_sessions(self) -> Self:
@@ -302,6 +336,7 @@ class DailyReport(BaseModel):
     generated_at: datetime
     run_status: RunStatus
     market_statuses: list[MarketStatus] = Field(default_factory=list)
+    market_outlook: MarketOutlook = Field(default_factory=MarketOutlook)
     global_risks: list[str] = Field(default_factory=list)
     run_warnings: list[str] = Field(default_factory=list)
     analyses: list[StockAnalysis]

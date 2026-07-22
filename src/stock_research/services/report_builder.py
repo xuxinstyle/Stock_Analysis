@@ -133,6 +133,7 @@ class ReportBuilder:
             generated_at=request.generated_at,
             run_status=status,
             market_statuses=self._market_statuses(stocks, analyses, request),
+            market_outlook=request.market_outlook,
             global_risks=self._global_risks(analyses),
             run_warnings=warnings,
             analyses=analyses,

@@ -13,7 +13,7 @@ import yaml
 from pydantic import ValidationError
 
 from stock_research.db import create_engine_at, create_read_only_engine_at
-from stock_research.domain.models import DailyRunRequest
+from stock_research.domain.models import DailyReport, DailyRunRequest
 from stock_research.repositories.runs import RunRepository
 from stock_research.repositories.stocks import StockRepository
 from stock_research.services.configuration import ConfigurationService
@@ -114,8 +114,9 @@ def load_daily_request(input_path: Path) -> DailyRunRequest:
 
 
 def _notify_generated_report(paths: ReportPaths, report_date: date) -> int:
-    markdown = paths.markdown.read_text(encoding="utf-8")
-    return FeishuNotificationService.from_environment().send_report_sections(report_date, markdown)
+    report = DailyReport.model_validate_json(paths.json.read_text(encoding="utf-8"))
+    sections = ReportStore.notification_sections(report)
+    return FeishuNotificationService.from_environment().send_report_sections(report_date, sections)
 
 
 @app.command("init")

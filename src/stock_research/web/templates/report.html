@@ -31,6 +31,14 @@
   </header>
 
   <section><h2>市场状态</h2><ul class="fact-list">{% for item in report.market_statuses %}<li><strong>{{ display_value(item.market.value, "market") }}</strong> · {{ display_value(item.status, "status") }} · {{ display_value(item.data_as_of) }} · {{ display_value(item.message, "message") }}<dl>{% for name, value in structured_fields(item) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>暂无市场状态。</li>{% endfor %}</ul></section>
+  <section>
+    <h2>大盘分析与后续展望</h2>
+    <p><strong>数据截至：</strong>{{ report.market_outlook.data_as_of or "不可用" }}</p>
+    <p><strong>当前大盘分析：</strong>{{ report.market_outlook.current_analysis }}</p>
+    <p><strong>上行情景条件：</strong>{{ report.market_outlook.upside_conditions|join("；") }}</p>
+    <p><strong>下行情景条件：</strong>{{ report.market_outlook.downside_conditions|join("；") }}</p>
+    <p><strong>后续观察项：</strong>{{ report.market_outlook.watch_items|join("；") }}</p>
+  </section>
   <section><h2>全局风险</h2><ul class="fact-list">{% for risk in report.global_risks %}<li>{{ display_value(risk, "global_risks") }}</li>{% else %}<li>暂无已记录的全局风险。</li>{% endfor %}</ul></section>
   <section><h2>运行警告</h2><ul class="fact-list">{% for warning in report.run_warnings %}<li>{{ display_value(warning, "run_warnings") }}</li>{% else %}<li>无运行警告。</li>{% endfor %}</ul></section>
 

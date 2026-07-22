@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from typing import Protocol, Self
 from urllib.parse import urlparse
@@ -18,10 +17,6 @@ _HEADERS = {"Content-Type": "application/json; charset=utf-8"}
 _DEFAULT_REPORT_TITLE = "股票研究报告"
 _SECTION_DISCLAIMER = "仅供研究参考，不构成个性化投资建议、收益保证或交易指令。"
 _SECTION_MESSAGE_PREFIX = f"{_SECTION_DISCLAIMER}\n\n"
-_COMPANY_HEADING = re.compile(
-    r"^# (?P<label>(?:SH|SZ|BJ|HK)\.\S+ .+)\n\n(?=## 股票配置$)", re.MULTILINE
-)
-_AGGREGATE_SUMMARY_HEADING = re.compile(r"^## 全部标的操作汇总$", re.MULTILINE)
 
 
 class FeishuNotificationError(RuntimeError):
@@ -106,50 +101,6 @@ def split_text_for_feishu(
     return messages
 
 
-def split_report_sections(markdown: str) -> list[tuple[str, str]]:
-    company_headings = list(_COMPANY_HEADING.finditer(markdown))
-    aggregate_headings = list(_AGGREGATE_SUMMARY_HEADING.finditer(markdown))
-    if not company_headings:
-        raise FeishuNotificationError("saved Markdown report does not contain company sections")
-    if not aggregate_headings:
-        raise FeishuNotificationError("saved Markdown report does not contain aggregate summary")
-
-    aggregate_heading = aggregate_headings[-1]
-    aggregate_start = aggregate_heading.start()
-    if company_headings[-1].start() >= aggregate_start:
-        raise FeishuNotificationError("saved Markdown report has invalid company section order")
-
-    sections: list[tuple[str, str]] = [
-        (
-            f"{_DEFAULT_REPORT_TITLE} — 市场概览",
-            _section_text(markdown[: company_headings[0].start()]),
-        )
-    ]
-    for index, heading in enumerate(company_headings):
-        next_start = (
-            company_headings[index + 1].start()
-            if index + 1 < len(company_headings)
-            else aggregate_start
-        )
-        sections.append(
-            (
-                f"{_DEFAULT_REPORT_TITLE} — {heading.group('label')}",
-                _section_text(markdown[heading.start() : next_start]),
-            )
-        )
-    sections.append(
-        (
-            f"{_DEFAULT_REPORT_TITLE} — 全部标的操作汇总",
-            _section_text(markdown[aggregate_start:]),
-        )
-    )
-    return sections
-
-
-def _section_text(markdown: str) -> str:
-    return f"{markdown.strip()}\n"
-
-
 def _split_body(text: str, fits_payload: Callable[[str], bool]) -> list[str]:
     bodies: list[str] = []
     current = ""
@@ -209,10 +160,12 @@ class FeishuNotificationService:
         messages = split_text_for_feishu(markdown, report_date)
         return self._send_messages(messages)
 
-    def send_report_sections(self, report_date: date, markdown: str) -> int:
+    def send_report_sections(self, report_date: date, sections: Sequence[tuple[str, str]]) -> int:
+        if not sections:
+            raise FeishuNotificationError("report does not contain notification sections")
         messages = [
             message
-            for report_title, section_markdown in split_report_sections(markdown)
+            for report_title, section_markdown in sections
             for message in split_text_for_feishu(
                 section_markdown,
                 report_date,
