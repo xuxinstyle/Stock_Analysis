@@ -62,13 +62,58 @@ def _payload_size(text: str) -> int:
 
 
 def split_text_for_feishu(text: str, report_date: date) -> list[str]:
-    """Return the initial one-segment representation; long-message splitting follows in Task 2."""
-    if not text:
+    if not text.strip():
         raise FeishuNotificationError("saved Markdown report is empty")
-    message = _message_text(report_date, 1, 1, text)
-    if _payload_size(message) > MAX_REQUEST_BYTES:
-        raise FeishuNotificationError("saved Markdown report exceeds the Feishu message size limit")
-    return [message]
+    reserved_header = _message_text(report_date, 99_999, 99_999, "")
+    bodies = _split_body(
+        text, lambda body: _payload_size(reserved_header + body) <= MAX_REQUEST_BYTES
+    )
+    if len(bodies) > 99_999:
+        raise FeishuNotificationError(
+            "saved Markdown report requires too many Feishu message segments"
+        )
+    messages = [
+        _message_text(report_date, segment_number, len(bodies), body)
+        for segment_number, body in enumerate(bodies, start=1)
+    ]
+    if any(_payload_size(message) > MAX_REQUEST_BYTES for message in messages):
+        raise FeishuNotificationError(
+            "saved Markdown report could not be split within the Feishu limit"
+        )
+    return messages
+
+
+def _split_body(text: str, fits_payload: Callable[[str], bool]) -> list[str]:
+    bodies: list[str] = []
+    current = ""
+    for line in text.splitlines(keepends=True):
+        if not fits_payload(line):
+            if current:
+                bodies.append(current)
+                current = ""
+            bodies.extend(_split_long_line(line, fits_payload))
+        elif current and not fits_payload(current + line):
+            bodies.append(current)
+            current = line
+        else:
+            current += line
+    if current:
+        bodies.append(current)
+    return bodies
+
+
+def _split_long_line(line: str, fits_payload: Callable[[str], bool]) -> list[str]:
+    parts: list[str] = []
+    current = ""
+    for character in line:
+        if current and not fits_payload(current + character):
+            parts.append(current)
+            current = character
+        else:
+            current += character
+    if current:
+        parts.append(current)
+    return parts
 
 
 class FeishuNotificationService:
