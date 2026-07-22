@@ -107,6 +107,44 @@ A 股：已收盘。
     assert all("不构成个性化投资建议" in text for text in texts)
 
 
+def test_send_report_sections_repeats_disclaimer_for_each_oversized_market_overview_segment() -> None:
+    posted: list[dict[str, object]] = []
+
+    def post(url: str, **kwargs: object) -> FakeResponse:
+        posted.append(kwargs["json"])
+        return FakeResponse(200, {"StatusCode": 0})
+
+    service = FeishuNotificationService(
+        "https://open.feishu.cn/open-apis/bot/v2/hook/test-token",
+        post=post,
+        sleep=lambda seconds: None,
+    )
+    market_overview = "# 每日股票研究报告 — 2026-07-22\n\n## 全球风险\n" + (
+        "海外市场波动需持续关注。\n" * 2_000
+    )
+    markdown = (
+        market_overview
+        + "\n# SZ.002594 比亚迪\n比亚迪公司分析。\n\n"
+        + "## 全部标的操作汇总\n汇总。\n"
+    )
+
+    assert service.send_report_sections(date(2026, 7, 22), markdown) > 3
+
+    overview_texts = [
+        payload["content"]["text"]
+        for payload in posted
+        if "市场概览" in payload["content"]["text"]
+    ]
+    disclaimer = "仅供研究参考，不构成个性化投资建议、收益保证或交易指令。\n\n"
+    overview_bodies = [text.split("\n", maxsplit=1)[1] for text in overview_texts]
+    assert len(overview_bodies) > 1
+    assert all(body.startswith(disclaimer) for body in overview_bodies)
+    assert all(len(_serialized_payload(text)) <= MAX_REQUEST_BYTES for text in overview_texts)
+    assert "".join(body.removeprefix(disclaimer) for body in overview_bodies) == (
+        market_overview.strip() + "\n"
+    )
+
+
 def test_rejects_non_feishu_or_non_v2_webhook_urls() -> None:
     with pytest.raises(FeishuNotificationError, match="HTTPS V2"):
         FeishuNotificationService("https://example.com/open-apis/bot/v2/hook/token")

@@ -17,6 +17,7 @@ MAX_REQUEST_BYTES = 18 * 1024
 _HEADERS = {"Content-Type": "application/json; charset=utf-8"}
 _DEFAULT_REPORT_TITLE = "股票研究报告"
 _SECTION_DISCLAIMER = "仅供研究参考，不构成个性化投资建议、收益保证或交易指令。"
+_SECTION_MESSAGE_PREFIX = f"{_SECTION_DISCLAIMER}\n\n"
 _COMPANY_HEADING = re.compile(r"^# (?P<label>(?:SH|SZ|BJ|HK)\.\S+ .+)$", re.MULTILINE)
 _AGGREGATE_SUMMARY_HEADING = re.compile(r"^## 全部标的操作汇总$", re.MULTILINE)
 
@@ -76,11 +77,17 @@ def _payload_size(text: str) -> int:
 
 
 def split_text_for_feishu(
-    text: str, report_date: date, *, report_title: str = _DEFAULT_REPORT_TITLE
+    text: str,
+    report_date: date,
+    *,
+    report_title: str = _DEFAULT_REPORT_TITLE,
+    message_prefix: str = "",
 ) -> list[str]:
     if not text.strip():
         raise FeishuNotificationError("saved Markdown report is empty")
-    reserved_header = _message_text(report_date, 99_999, 99_999, "", report_title)
+    reserved_header = _message_text(
+        report_date, 99_999, 99_999, message_prefix, report_title
+    )
     bodies = _split_body(
         text, lambda body: _payload_size(reserved_header + body) <= MAX_REQUEST_BYTES
     )
@@ -89,7 +96,7 @@ def split_text_for_feishu(
             "saved Markdown report requires too many Feishu message segments"
         )
     messages = [
-        _message_text(report_date, segment_number, len(bodies), body, report_title)
+        _message_text(report_date, segment_number, len(bodies), message_prefix + body, report_title)
         for segment_number, body in enumerate(bodies, start=1)
     ]
     if any(_payload_size(message) > MAX_REQUEST_BYTES for message in messages):
@@ -139,7 +146,7 @@ def split_report_sections(markdown: str) -> list[tuple[str, str]]:
 
 
 def _section_text(markdown: str) -> str:
-    return f"{_SECTION_DISCLAIMER}\n\n{markdown.strip()}\n"
+    return f"{markdown.strip()}\n"
 
 
 def _split_body(text: str, fits_payload: Callable[[str], bool]) -> list[str]:
@@ -209,6 +216,7 @@ class FeishuNotificationService:
                     section_markdown,
                     report_date,
                     report_title=report_title,
+                    message_prefix=_SECTION_MESSAGE_PREFIX,
                 )
             )
         return sent_segments
