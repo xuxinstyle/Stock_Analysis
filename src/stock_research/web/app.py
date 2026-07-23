@@ -119,7 +119,7 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
     templates.env.globals.update(
         recommendation_for=ReportStore._recommendation_for,
         recommendation_summary=ReportStore._recommendation_summary,
-        recommendation_detail=ReportStore._recommendation_detail,
+        recommendation_overview=ReportStore._recommendation_overview,
         stock_configuration_summary=ReportStore._stock_configuration_summary,
         previous_day_summary=ReportStore._previous_day_summary,
         technical_summary=ReportStore._technical_summary,

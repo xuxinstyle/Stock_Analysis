@@ -322,7 +322,7 @@ class ReportStore:
             report=report,
             recommendation_for=self._recommendation_for,
             recommendation_summary=self._recommendation_summary,
-            recommendation_detail=self._recommendation_detail,
+            recommendation_overview=self._recommendation_overview,
             stock_configuration_summary=self._stock_configuration_summary,
             previous_day_summary=self._previous_day_summary,
             technical_summary=self._technical_summary,
@@ -494,15 +494,8 @@ class ReportStore:
                     lines.append(f"  - 事件来源：[{event.citation_title}]({event.citation_url})")
         else:
             lines.append("- 无已提供的可验证突发事件。")
-        for horizon, heading in (
-            (Horizon.SHORT, "短线建议"),
-            (Horizon.MEDIUM, "中线建议"),
-            (Horizon.LONG, "长线建议"),
-        ):
-            recommendation = ReportStore._recommendation_for(analysis, horizon)
-            lines.extend(["", f"## {heading}"])
-            if recommendation:
-                lines.append(f"- {ReportStore._recommendation_detail(recommendation)}")
+        lines.extend(["", "## 操作建议"])
+        lines.extend(f"- {item}" for item in ReportStore._recommendation_overview(analysis))
         lines.extend(["", "## 来源与数据缺口"])
         if research and research.evidence:
             lines.extend(
@@ -563,15 +556,28 @@ class ReportStore:
         return f"{action}（{risk}风险 / {confidence}置信度）"
 
     @staticmethod
-    def _recommendation_detail(recommendation: Recommendation) -> str:
-        summary = ReportStore._recommendation_summary(recommendation)
-        trigger = ReportStore._brief_text(
-            ReportStore._display_value(recommendation.trigger, "trigger"), 100
+    def _recommendation_overview(analysis: StockAnalysis) -> list[str]:
+        horizons = (
+            (Horizon.SHORT, "短线"),
+            (Horizon.MEDIUM, "中线"),
+            (Horizon.LONG, "长线"),
         )
-        detail = f"建议：{summary}；{trigger}；仓位上限：{recommendation.position_limit}"
-        if recommendation.holding_impact:
-            detail += f"；持仓影响：{recommendation.holding_impact}"
-        return detail
+        recommendations = [
+            (heading, ReportStore._recommendation_for(analysis, horizon))
+            for horizon, heading in horizons
+        ]
+        if not any(recommendation for _, recommendation in recommendations):
+            return ["暂无可用建议。"]
+        summaries = [
+            ReportStore._recommendation_summary(recommendation)
+            for _, recommendation in recommendations
+        ]
+        if len(set(summaries)) == 1:
+            return [f"短、中、长线一致：{summaries[0]}"]
+        return [
+            f"{heading}：{summary}"
+            for (heading, _), summary in zip(recommendations, summaries, strict=True)
+        ]
 
     @staticmethod
     def _stock_configuration_summary(analysis: StockAnalysis) -> str:

@@ -145,6 +145,7 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
         ("policy_summary", "政策分析"),
         ("news_summary", "消息面分析"),
         ("events", "突发事件"),
+        ("recommendations", "操作建议"),
         ("evidence", "来源与数据缺口"),
     )
     for json_key, heading in section_contracts:
@@ -152,11 +153,8 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
         assert heading in markdown
         assert heading in html
 
-    for horizon, heading in (
-        ("short", "短线建议"),
-        ("medium", "中线建议"),
-        ("long", "长线建议"),
-    ):
-        assert any(item["horizon"] == horizon for item in analysis_payload["recommendations"])
-        assert heading in markdown
-        assert heading in html
+    assert {item["horizon"] for item in analysis_payload["recommendations"]} == {
+        "short",
+        "medium",
+        "long",
+    }

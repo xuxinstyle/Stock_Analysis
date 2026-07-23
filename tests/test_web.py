@@ -81,7 +81,7 @@ def test_report_page_sanitizes_legacy_system_copy_and_provider_diagnostics(
     assert response.status_code == 200
     assert "本报告仅供研究参考，不构成个性化投资建议、收益保证或交易指令。" in response.text
     assert "SH.600000：未能取得完整的日行情数据，已暂缓技术分析。" in response.text
-    assert "触发条件：补齐并核验缺失的本地数据后再评估。" in response.text
+    assert "触发条件：补齐并核验缺失的本地数据后再评估。" not in response.text
     assert "Local cited source 0" in response.text
     assert 'href="https://example.test/SH.600000/0"' in response.text
     for forbidden in (
@@ -144,9 +144,7 @@ def test_report_page_preserves_report_facts_disclaimer_gaps_and_source_links(
     source = report.analyses[0].research.evidence[0]
     assert f'href="{source.url}"' in response.text
     assert source.title in response.text
-    assert (
-        ReportStore._recommendation_detail(report.analyses[0].recommendations[0]) in response.text
-    )
+    assert ReportStore._recommendation_overview(report.analyses[0])[0] in response.text
 
 
 def test_missing_report_returns_404(client: TestClient) -> None:

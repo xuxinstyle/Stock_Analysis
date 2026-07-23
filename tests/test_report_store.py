@@ -97,9 +97,7 @@ def test_report_contains_all_required_sections_per_stock(tmp_path: Path) -> None
         "政策分析",
         "消息面分析",
         "突发事件",
-        "短线建议",
-        "中线建议",
-        "长线建议",
+        "操作建议",
         "来源与数据缺口",
     ]:
         assert heading in markdown
@@ -126,6 +124,66 @@ def test_report_uses_compact_per_stock_presentation(tmp_path: Path) -> None:
     assert "Local cited source 0" in markdown
     assert len(stock_section.splitlines()) <= 60
     assert html.count("<dt>") < 20
+
+
+def test_report_collapses_identical_horizon_advice_and_hides_internal_fields(
+    tmp_path: Path,
+) -> None:
+    report = make_complete_report()
+    analysis = report.analyses[0]
+    recommendations = [
+        recommendation.model_copy(update={"holding_impact": "相对成本价的信息性收益：+20.00%。"})
+        for recommendation in analysis.recommendations
+    ]
+    report = report.model_copy(
+        update={"analyses": [analysis.model_copy(update={"recommendations": recommendations})]}
+    )
+
+    paths = ReportStore(tmp_path).save(report)
+    html = paths.html.read_text(encoding="utf-8")
+    payload = json.loads(paths.json.read_text(encoding="utf-8"))
+    stock_section = "\n".join(ReportStore._markdown_analysis(report.analyses[0]))
+    expected = ReportStore._recommendation_summary(recommendations[0])
+
+    assert f"## 操作建议\n- 短、中、长线一致：{expected}" in stock_section
+    assert "短线建议" not in stock_section
+    assert "中线建议" not in stock_section
+    assert "长线建议" not in stock_section
+    assert f"短、中、长线一致：{expected}" in html
+    for internal_value in (
+        recommendations[0].trigger,
+        recommendations[0].holding_impact,
+        "周期复核：",
+        "仓位上限：",
+        "持仓影响：",
+    ):
+        assert internal_value not in stock_section
+        assert internal_value not in html
+    assert payload["analyses"][0]["recommendations"][0]["trigger"]
+    assert payload["analyses"][0]["recommendations"][0]["holding_impact"] == (
+        "相对成本价的信息性收益：+20.00%。"
+    )
+
+
+def test_report_lists_horizon_advice_separately_when_conclusions_differ(tmp_path: Path) -> None:
+    report = make_complete_report()
+    analysis = report.analyses[0]
+    recommendations = [
+        *analysis.recommendations[:1],
+        analysis.recommendations[1].model_copy(update={"action": Action.BUY_IN_TRANCHES}),
+        *analysis.recommendations[2:],
+    ]
+    report = report.model_copy(
+        update={"analyses": [analysis.model_copy(update={"recommendations": recommendations})]}
+    )
+
+    stock_section = "\n".join(ReportStore._markdown_analysis(report.analyses[0]))
+
+    assert "短、中、长线一致" not in stock_section
+    for horizon, recommendation in zip(("短线", "中线", "长线"), recommendations, strict=True):
+        assert (
+            f"- {horizon}：{ReportStore._recommendation_summary(recommendation)}" in stock_section
+        )
 
 
 def test_report_renders_recent_price_move_analysis_in_all_channels(tmp_path: Path) -> None:
@@ -257,13 +315,13 @@ def test_markdown_and_html_render_chinese_display_labels_and_enum_values(tmp_pat
     assert "运行状态：成功" in markdown
     assert "# SH.600000 Example Stock" in markdown
     assert "## 股票配置\n- 市场：A股" in markdown
-    assert "建议：观望（低风险 / 中等置信度）" in markdown
+    assert "短、中、长线一致：观望（低风险 / 中等置信度）" in markdown
     assert "run_status" not in markdown
     assert "action" not in markdown
     assert "<dt>运行状态</dt><dd>成功</dd>" in html
     assert "<h1>SH.600000 Example Stock</h1>" in html
     assert "<p>市场：A股；行业：Banking</p>" in html
-    assert "建议：观望（低风险 / 中等置信度）" in html
+    assert "短、中、长线一致：观望（低风险 / 中等置信度）" in html
     assert "run_status" not in html
     assert "action" not in html
     assert payload["run_status"] == "success"
@@ -460,7 +518,7 @@ def test_real_legacy_report_renders_safe_chinese_without_mutating_saved_json(
         assert "本报告仅供研究参考，不构成个性化投资建议、收益保证或交易指令。" in content
         assert "已配置股票的已完成交易日数据不可用或已过期。" in content
         assert safe_gap in content
-        assert "触发条件：补齐并核验缺失的本地数据后再评估。" in content
+        assert "触发条件：补齐并核验缺失的本地数据后再评估。" not in content
         assert "仅观察：数据不完整时不提供价格目标。" not in content
         assert "失效条件：缺失数据仍不可获得或无法核验。" not in content
         assert "前日表现不作归因" in content
@@ -592,8 +650,8 @@ def test_contextual_medium_labels_render_in_markdown_and_html(tmp_path: Path) ->
     html = paths.html.read_text(encoding="utf-8")
     payload = json.loads(paths.json.read_text(encoding="utf-8"))
 
-    assert "建议：观望（中等风险 / 中等置信度）" in markdown
-    assert "建议：观望（中等风险 / 中等置信度）" in html
+    assert "中线：观望（中等风险 / 中等置信度）" in markdown
+    assert "中线：观望（中等风险 / 中等置信度）" in html
     assert ReportStore._display_value(Horizon.MEDIUM.value, "horizon") == "中线"
     assert ReportStore._display_value(RiskLevel.MEDIUM.value, "risk_level") == "中等"
     assert ReportStore._display_value(Confidence.MEDIUM.value, "confidence") == "中等"
@@ -640,12 +698,12 @@ def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Pat
     expected_facts = [
         "2026-07-21",
         "2026-07-20",
-        "相对成本价的信息性收益：+79.00%。",
         "Confirmed exchange event notice",
         "https://example.test/confirmed-event",
     ]
     for content in rendered:
         assert all(fact in content for fact in expected_facts)
+    assert "相对成本价的信息性收益：+79.00%。" in rendered[0]
     assert 'href="https://example.test/confirmed-event"' in rendered[2]
     assert "持仓：100 股，成本 10" in rendered[1]
     assert "持仓：100 股，成本 10" in rendered[2]
@@ -657,3 +715,4 @@ def test_all_formats_render_equivalent_dates_holding_and_citations(tmp_path: Pat
         assert event.title in content
         assert event.citation_title in content
         assert "现金可用" not in content
+        assert "相对成本价的信息性收益：+79.00%。" not in content

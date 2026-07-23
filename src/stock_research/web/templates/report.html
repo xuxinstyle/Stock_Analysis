@@ -60,10 +60,7 @@
 
     <section><h2>突发事件</h2><ul class="fact-list">{% if analysis.research %}{% for event in analysis.research.events %}<li><strong>{{ event.title }}</strong> · {{ brief_text(event.summary, 120) }}{% if event.citation_title and event.citation_url %}<br>事件来源：<a href="{{ event.citation_url }}">{{ event.citation_title }}</a>{% endif %}</li>{% else %}<li>无已提供的可验证突发事件。</li>{% endfor %}{% else %}<li>无已提供的可验证突发事件。</li>{% endif %}</ul></section>
 
-    {% for horizon, heading in [("short", "短线建议"), ("medium", "中线建议"), ("long", "长线建议")] %}
-      {% set recommendation = recommendation_for(analysis, horizon) %}
-      <section><h2>{{ heading }}</h2>{% if recommendation %}<p>{{ recommendation_detail(recommendation) }}</p>{% endif %}</section>
-    {% endfor %}
+    <section><h2>操作建议</h2><ul class="fact-list">{% for item in recommendation_overview(analysis) %}<li>{{ item }}</li>{% else %}<li>暂无可用建议。</li>{% endfor %}</ul></section>
 
     <section><h2>来源与数据缺口</h2><ul class="fact-list">{% if analysis.research %}{% for evidence in analysis.research.evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> · {{ evidence_summary(evidence) }}</li>{% else %}<li>无已验证的引用来源。</li>{% endfor %}{% else %}<li>无已验证的引用来源。</li>{% endif %}{% for gap in analysis.data_gaps %}<li><strong>数据缺口：</strong>{{ display_value(gap, "data_gaps") }}</li>{% else %}<li>无已记录的数据缺口。</li>{% endfor %}</ul></section>
   </article>
