@@ -22,6 +22,7 @@ from stock_research.domain.enums import (
 )
 from stock_research.domain.models import (
     DailyReport,
+    Evidence,
     EventSignal,
     Holding,
     MarketStatus,
@@ -90,15 +91,14 @@ def test_report_contains_all_required_sections_per_stock(tmp_path: Path) -> None
     markdown = paths.markdown.read_text(encoding="utf-8")
     for heading in [
         "大盘分析与后续展望",
-        "前日表现与原因",
+        "价格表现与归因",
         "基本面分析",
         "行业分析",
         "技术面分析",
         "政策分析",
         "消息面分析",
-        "突发事件",
         "操作建议",
-        "来源与数据缺口",
+        "来源",
     ]:
         assert heading in markdown
     assert paths.json.exists() and paths.html.exists()
@@ -124,6 +124,225 @@ def test_report_uses_compact_per_stock_presentation(tmp_path: Path) -> None:
     assert "Local cited source 0" in markdown
     assert len(stock_section.splitlines()) <= 60
     assert html.count("<dt>") < 20
+
+
+def test_report_hides_empty_optional_sections_and_unconfigured_product_price(
+    tmp_path: Path,
+) -> None:
+    report = make_complete_report()
+
+    paths = ReportStore(tmp_path).save(report)
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+
+    for content in (markdown, html):
+        assert "突发事件" not in content
+        assert "无已提供的可验证突发事件" not in content
+        assert "产品价格：" not in content
+        assert "无已记录的数据缺口" not in content
+    assert "## 来源" in markdown
+    assert "## 来源与数据缺口" not in markdown
+
+
+def test_report_combines_price_performance_with_one_concise_previous_day_reason(
+    tmp_path: Path,
+) -> None:
+    report = make_complete_report()
+    analysis = report.analyses[0]
+    previous = analysis.previous_day.model_copy(
+        update={"reason": "重复的前日归因只应保留在原始 JSON。"}
+    )
+    research = analysis.research.model_copy(
+        update={"recent_price_move_summary": "近五日走势与已证实驱动。"}
+    )
+    report = report.model_copy(
+        update={
+            "analyses": [
+                analysis.model_copy(update={"previous_day": previous, "research": research})
+            ]
+        }
+    )
+
+    paths = ReportStore(tmp_path).save(report)
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+    payload = json.loads(paths.json.read_text(encoding="utf-8"))
+
+    for content in (markdown, html):
+        assert "价格表现与归因" in content
+        assert "近五日走势与已证实驱动。" in content
+        assert "重复的前日归因只应保留在原始 JSON。" in content
+        assert "前日表现与原因" not in content
+        assert "近期股价涨跌原因" not in content
+    assert payload["analyses"][0]["previous_day"]["reason"] == (
+        "重复的前日归因只应保留在原始 JSON。"
+    )
+
+
+def test_report_moves_matching_cross_stock_public_evidence_to_overview(tmp_path: Path) -> None:
+    first = make_stock()
+    second = make_stock("SZ.000001")
+    report = ReportBuilder().build(
+        make_request(make_research(first.symbol), make_research(second.symbol)),
+        [first, second],
+        FakeMarketData(),
+    )
+    shared = Evidence(
+        title="Shared market source",
+        url="https://example.test/shared-market-source",
+        source_name="Shared market newsroom",
+        published_at=datetime(2026, 7, 20, tzinfo=UTC),
+        retrieved_at=datetime(2026, 7, 21, tzinfo=UTC),
+        category=EvidenceCategory.INTERNATIONAL,
+        direction=Direction.NEUTRAL,
+        credibility=Credibility.SECONDARY,
+        summary="A public market source that applies to multiple configured stocks.",
+        symbols=[first.symbol, second.symbol],
+    )
+    analyses = []
+    for index, analysis in enumerate(report.analyses, start=1):
+        analyses.append(
+            analysis.model_copy(
+                update={
+                    "research": analysis.research.model_copy(
+                        update={
+                            "evidence": [*analysis.research.evidence, shared],
+                            "international_summary": f"个股 {index} 的国际传导解释。",
+                        }
+                    )
+                }
+            )
+        )
+    report = report.model_copy(update={"analyses": analyses})
+
+    paths = ReportStore(tmp_path).save(report)
+    markdown = paths.markdown.read_text(encoding="utf-8")
+    html = paths.html.read_text(encoding="utf-8")
+    sections = ReportStore.notification_sections(report)
+
+    assert markdown.count("https://example.test/shared-market-source") == 1
+    assert html.count('href="https://example.test/shared-market-source"') == 1
+    assert "## 公共参考来源" in markdown
+    assert "公共参考来源" in sections[0][1]
+    assert all("shared-market-source" not in section for _, section in sections[1:-1])
+    assert "个股 1 的国际传导解释。" in markdown
+    assert "个股 2 的国际传导解释。" in markdown
+    assert "个股 1 的国际传导解释。" in sections[1][1]
+    assert "个股 2 的国际传导解释。" in sections[2][1]
+    assert "https://example.test/SH.600000/0" in markdown
+    assert "https://example.test/SZ.000001/0" in markdown
+
+
+def test_report_keeps_repeated_company_evidence_in_each_stock_section(tmp_path: Path) -> None:
+    first = make_stock()
+    second = make_stock("SZ.000001")
+    report = ReportBuilder().build(
+        make_request(make_research(first.symbol), make_research(second.symbol)),
+        [first, second],
+        FakeMarketData(),
+    )
+    shared_company_source = Evidence(
+        title="Shared company source",
+        url="https://example.test/shared-company-source",
+        source_name="Company newsroom",
+        published_at=datetime(2026, 7, 20, tzinfo=UTC),
+        retrieved_at=datetime(2026, 7, 21, tzinfo=UTC),
+        category=EvidenceCategory.COMPANY,
+        direction=Direction.NEUTRAL,
+        credibility=Credibility.PRIMARY,
+        summary="A company source that must remain visible for every affected stock.",
+        symbols=[first.symbol, second.symbol],
+    )
+    report = report.model_copy(
+        update={
+            "analyses": [
+                analysis.model_copy(
+                    update={
+                        "research": analysis.research.model_copy(
+                            update={
+                                "evidence": [
+                                    *analysis.research.evidence,
+                                    shared_company_source,
+                                ]
+                            }
+                        )
+                    }
+                )
+                for analysis in report.analyses
+            ]
+        }
+    )
+
+    markdown = ReportStore._render_markdown(report)
+
+    assert "公共参考来源" not in markdown
+    assert markdown.count("https://example.test/shared-company-source") == 2
+
+
+def test_report_keeps_news_and_nonidentical_international_evidence_per_stock(
+    tmp_path: Path,
+) -> None:
+    first = make_stock()
+    second = make_stock("SZ.000001")
+    report = ReportBuilder().build(
+        make_request(make_research(first.symbol), make_research(second.symbol)),
+        [first, second],
+        FakeMarketData(),
+    )
+    shared_news = Evidence(
+        title="Shared news source",
+        url="https://example.test/shared-news-source",
+        source_name="Newsroom",
+        published_at=datetime(2026, 7, 20, tzinfo=UTC),
+        retrieved_at=datetime(2026, 7, 21, tzinfo=UTC),
+        category=EvidenceCategory.NEWS,
+        direction=Direction.NEUTRAL,
+        credibility=Credibility.SECONDARY,
+        summary="A news item that remains in each stock's evidence list.",
+        symbols=[first.symbol, second.symbol],
+    )
+    international_by_stock = [
+        Evidence(
+            title="International context",
+            url="https://example.test/international-context",
+            source_name="International newsroom",
+            published_at=datetime(2026, 7, 20, tzinfo=UTC),
+            retrieved_at=datetime(2026, 7, 21, tzinfo=UTC),
+            category=EvidenceCategory.INTERNATIONAL,
+            direction=Direction.NEUTRAL,
+            credibility=Credibility.SECONDARY,
+            summary=f"Stock {index} needs a distinct international transmission explanation.",
+            symbols=[stock.symbol],
+        )
+        for index, stock in enumerate((first, second), start=1)
+    ]
+    report = report.model_copy(
+        update={
+            "analyses": [
+                analysis.model_copy(
+                    update={
+                        "research": analysis.research.model_copy(
+                            update={
+                                "evidence": [
+                                    *analysis.research.evidence,
+                                    shared_news,
+                                    international_by_stock[index],
+                                ]
+                            }
+                        )
+                    }
+                )
+                for index, analysis in enumerate(report.analyses)
+            ]
+        }
+    )
+
+    paths = ReportStore(tmp_path).save(report)
+    markdown = paths.markdown.read_text(encoding="utf-8")
+
+    assert "公共参考来源" not in markdown
+    assert markdown.count("https://example.test/shared-news-source") == 2
+    assert markdown.count("https://example.test/international-context") == 2
 
 
 def test_report_collapses_identical_horizon_advice_and_hides_internal_fields(
@@ -197,9 +416,9 @@ def test_report_renders_recent_price_move_analysis_in_all_channels(tmp_path: Pat
     html = paths.html.read_text(encoding="utf-8")
     sections = ReportStore.notification_sections(report)
 
-    assert "## 近期股价涨跌原因" in markdown
+    assert "## 价格表现与归因" in markdown
     assert summary in markdown
-    assert "<h2>近期股价涨跌原因</h2>" in html
+    assert "<h2>价格表现与归因</h2>" in html
     assert summary in html
     assert any(summary in section for _, section in sections)
 
@@ -361,11 +580,10 @@ def test_reports_end_with_per_stock_recommendation_summary(tmp_path: Path) -> No
     html = paths.html.read_text(encoding="utf-8")
 
     assert markdown.rstrip().endswith(
-        "| SZ.000001 Example Stock | 观望（低风险 / 中等置信度） | "
-        "观望（低风险 / 中等置信度） | 观望（低风险 / 中等置信度） |"
+        "- SZ.000001 Example Stock：短、中、长线一致：观望（低风险 / 中等置信度）"
     )
     assert "## 全部标的操作汇总" in markdown
-    assert "| 股票 | 短线建议 | 中线建议 | 长线建议 |" in markdown
+    assert "| 股票 | 短线建议 | 中线建议 | 长线建议 |" not in markdown
     assert '<section class="recommendation-summary"' in html
     assert "全部标的操作汇总" in html
     assert "SH.600000 Example Stock" in html
@@ -521,7 +739,7 @@ def test_real_legacy_report_renders_safe_chinese_without_mutating_saved_json(
         assert "触发条件：补齐并核验缺失的本地数据后再评估。" not in content
         assert "仅观察：数据不完整时不提供价格目标。" not in content
         assert "失效条件：缺失数据仍不可获得或无法核验。" not in content
-        assert "前日表现不作归因" in content
+        assert "前日表现不作归因" not in content
         assert "Local cited source 0" in content
         assert "https://example.test/SH.600000/0" in content
         for forbidden in (

@@ -147,6 +147,20 @@ def test_report_page_preserves_report_facts_disclaimer_gaps_and_source_links(
     assert ReportStore._recommendation_overview(report.analyses[0])[0] in response.text
 
 
+def test_report_page_shows_each_market_status_once(client: TestClient) -> None:
+    report = make_complete_report()
+    client.app.state.services.reports.save(report)
+
+    response = client.get(f"/reports/{report.report_date}")
+
+    assert response.status_code == 200
+    market_section = response.text.split("<section><h2>市场状态</h2>", maxsplit=1)[1].split(
+        "</section>", maxsplit=1
+    )[0]
+    assert market_section.count("<strong>A股</strong>") == 1
+    assert "<dl>" not in market_section
+
+
 def test_missing_report_returns_404(client: TestClient) -> None:
     response = client.get("/reports/2026-07-20")
 

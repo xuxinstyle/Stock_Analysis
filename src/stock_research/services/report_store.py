@@ -13,11 +13,12 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel
 
 from stock_research.db import create_engine_at
-from stock_research.domain.enums import Horizon
+from stock_research.domain.enums import EvidenceCategory, Horizon
 from stock_research.domain.models import (
     DATA_GAP_RATIONALE_PREFIX,
     LEGACY_DATA_GAP_RATIONALE_PREFIX,
     DailyReport,
+    Evidence,
     Recommendation,
     StockAnalysis,
 )
@@ -209,6 +210,10 @@ _LEGACY_SYSTEM_TEXT_FIELDS = {
     "invalidation",
 }
 _LEGACY_PRICE_DATA_FIELDS = {"data_gaps", "reason", "rationale", "run_warnings"}
+_PUBLIC_EVIDENCE_CATEGORIES = {
+    EvidenceCategory.POLICY,
+    EvidenceCategory.INTERNATIONAL,
+}
 _LEGACY_CLOSED_STATUS = re.compile(
     r"Market was closed on report date (\d{4}-\d{2}-\d{2}); prior completed session "
     r"data is current for all configured stocks\."
@@ -320,13 +325,17 @@ class ReportStore:
         template = self._environment.get_template("report.html")
         return template.render(
             report=report,
+            public_evidence_for=self._public_evidence,
             recommendation_for=self._recommendation_for,
             recommendation_summary=self._recommendation_summary,
             recommendation_overview=self._recommendation_overview,
             stock_configuration_summary=self._stock_configuration_summary,
             previous_day_summary=self._previous_day_summary,
+            previous_day_metrics=self._previous_day_metrics,
             technical_summary=self._technical_summary,
             evidence_summary=self._evidence_summary,
+            stock_evidence_for=self._stock_evidence_for_report,
+            has_stock_international_evidence_for=self._has_stock_international_evidence_for_report,
             brief_text=self._brief_text,
             structured_fields=self._structured_fields,
             display_field=self._display_field,
@@ -336,9 +345,13 @@ class ReportStore:
 
     @staticmethod
     def _render_markdown(report: DailyReport) -> str:
+        public_evidence_urls = ReportStore._public_evidence_urls(report.analyses)
         sections = [
             "\n".join(ReportStore._markdown_overview(report)),
-            *("\n".join(ReportStore._markdown_analysis(analysis)) for analysis in report.analyses),
+            *(
+                "\n".join(ReportStore._markdown_analysis(analysis, public_evidence_urls))
+                for analysis in report.analyses
+            ),
             "\n".join(ReportStore._markdown_recommendation_summary(report.analyses)),
         ]
         return "\n".join(sections) + "\n"
@@ -348,6 +361,7 @@ class ReportStore:
         """Render Feishu sections from trusted report structure, never from research Markdown."""
 
         title = "每日股票研究报告"
+        public_evidence_urls = ReportStore._public_evidence_urls(report.analyses)
         return [
             (
                 f"{title} — 市场概览",
@@ -356,7 +370,9 @@ class ReportStore:
             *[
                 (
                     f"{title} — {analysis.stock.symbol} {analysis.stock.name}",
-                    ReportStore._section_text(ReportStore._markdown_analysis(analysis)),
+                    ReportStore._section_text(
+                        ReportStore._markdown_analysis(analysis, public_evidence_urls)
+                    ),
                 )
                 for analysis in report.analyses
             ],
@@ -405,17 +421,29 @@ class ReportStore:
                     if report.market_outlook.data_as_of
                     else "- 数据截至：不可用"
                 ),
-                f"- 当前大盘分析：{report.market_outlook.current_analysis}",
-                "- 上行情景条件：" + "；".join(report.market_outlook.upside_conditions),
-                "- 下行情景条件：" + "；".join(report.market_outlook.downside_conditions),
-                "- 后续观察项：" + "；".join(report.market_outlook.watch_items),
+                f"- 当前大盘分析：{ReportStore._brief_text(report.market_outlook.current_analysis, 180)}",
+                "- 上行情景条件："
+                + ReportStore._brief_text("；".join(report.market_outlook.upside_conditions), 160),
+                "- 下行情景条件："
+                + ReportStore._brief_text(
+                    "；".join(report.market_outlook.downside_conditions), 160
+                ),
+                "- 后续观察项："
+                + ReportStore._brief_text("；".join(report.market_outlook.watch_items), 160),
             ]
         )
         lines.extend(["", "## 全局风险"])
         lines.extend(
-            f"- {ReportStore._display_value(risk, 'global_risks')}"
+            f"- {ReportStore._brief_text(ReportStore._display_value(risk, 'global_risks'), 160)}"
             for risk in report.global_risks or ["无已提供全局风险摘要。"]
         )
+        public_evidence = ReportStore._public_evidence(report.analyses)
+        if public_evidence:
+            lines.extend(["", "## 公共参考来源"])
+            lines.extend(
+                f"- [{evidence.title}]({evidence.url}) — {ReportStore._evidence_summary(evidence)}"
+                for evidence in public_evidence
+            )
         lines.extend(["", "## 运行警告"])
         lines.extend(
             f"- {ReportStore._display_value(warning, 'run_warnings')}"
@@ -425,7 +453,10 @@ class ReportStore:
         return lines
 
     @staticmethod
-    def _compact_markdown_analysis(analysis: StockAnalysis) -> list[str]:
+    def _compact_markdown_analysis(
+        analysis: StockAnalysis,
+        public_evidence_urls: set[str] | frozenset[str] = frozenset(),
+    ) -> list[str]:
         research = analysis.research
         lines = [
             "",
@@ -439,14 +470,12 @@ class ReportStore:
                 else "- 研究数据截至：不可用"
             ),
             "",
-            "## 前日表现与原因",
+            "## 价格表现与归因",
             f"- {ReportStore._previous_day_summary(analysis)}",
-            "",
-            "## 近期股价涨跌原因",
             (
-                ReportStore._brief_text(research.recent_price_move_summary, 180)
+                f"- 近期走势与驱动：{ReportStore._brief_text(research.recent_price_move_summary, 180)}"
                 if research
-                else "数据缺口：缺少研究输入，无法说明近期股价涨跌原因。"
+                else "- 数据缺口：缺少研究输入，无法说明近期股价涨跌原因。"
             ),
             "",
             "## 基本面分析",
@@ -458,33 +487,46 @@ class ReportStore:
             "",
             "## 行业分析",
             (
-                f"{ReportStore._brief_text(research.industry_summary, 140)}\n\n"
-                f"产品价格：{ReportStore._brief_text(research.product_price_summary, 160)}"
+                ReportStore._brief_text(research.industry_summary, 140)
                 if research
                 else "数据缺口：缺少研究输入。"
             ),
-            "",
-            "## 技术面分析",
-            f"- {ReportStore._technical_summary(analysis)}",
-            "",
-            "## 政策分析",
-            (
-                ReportStore._brief_text(research.policy_summary, 140)
-                if research
-                else "数据缺口：缺少研究输入。"
-            ),
-            "",
-            "## 消息面分析",
-            (
-                f"{ReportStore._brief_text(research.news_summary, 140)}\n\n"
-                f"国际传导：{ReportStore._brief_text(research.international_summary, 120)}"
-                if research
-                else "数据缺口：缺少研究输入。"
-            ),
-            "",
-            "## 突发事件",
         ]
+        if research and analysis.stock.product_price_focus:
+            lines.extend(
+                [
+                    f"产品价格：{ReportStore._brief_text(research.product_price_summary, 160)}",
+                ]
+            )
+        lines.extend(
+            [
+                "",
+                "## 技术面分析",
+                f"- {ReportStore._technical_summary(analysis)}",
+                "",
+                "## 政策分析",
+                (
+                    ReportStore._brief_text(research.policy_summary, 140)
+                    if research
+                    else "数据缺口：缺少研究输入。"
+                ),
+                "",
+                "## 消息面分析",
+                (
+                    ReportStore._brief_text(research.news_summary, 140)
+                    if research
+                    else "数据缺口：缺少研究输入。"
+                ),
+            ]
+        )
+        if research and ReportStore._has_stock_international_summary(analysis):
+            lines.append(
+                "国际传导：" + ReportStore._brief_text(research.international_summary, 120)
+            )
+        if research:
+            lines.append(f"研究数据截至：{research.data_as_of.isoformat()}")
         if research and research.events:
+            lines.extend(["", "## 突发事件"])
             for event in research.events:
                 lines.append(
                     f"- {event.occurred_at.isoformat()} — {event.title}："
@@ -492,27 +534,29 @@ class ReportStore:
                 )
                 if event.citation_title and event.citation_url:
                     lines.append(f"  - 事件来源：[{event.citation_title}]({event.citation_url})")
-        else:
-            lines.append("- 无已提供的可验证突发事件。")
         lines.extend(["", "## 操作建议"])
         lines.extend(f"- {item}" for item in ReportStore._recommendation_overview(analysis))
-        lines.extend(["", "## 来源与数据缺口"])
-        if research and research.evidence:
+        stock_evidence = ReportStore._stock_evidence(analysis, public_evidence_urls)
+        if stock_evidence or analysis.data_gaps:
+            lines.extend(["", "## 来源与数据缺口" if analysis.data_gaps else "## 来源"])
+        if stock_evidence:
             lines.extend(
                 f"- [{evidence.title}]({evidence.url}) — {ReportStore._evidence_summary(evidence)}"
-                for evidence in research.evidence
+                for evidence in stock_evidence
             )
-        else:
-            lines.append("- 无已验证的引用来源。")
-        lines.extend(
-            f"- 数据缺口：{ReportStore._display_value(gap, 'data_gaps')}"
-            for gap in analysis.data_gaps
-        )
+        if analysis.data_gaps:
+            lines.extend(
+                f"- 数据缺口：{ReportStore._display_value(gap, 'data_gaps')}"
+                for gap in analysis.data_gaps
+            )
         return lines
 
     @staticmethod
-    def _markdown_analysis(analysis: StockAnalysis) -> list[str]:
-        return ReportStore._compact_markdown_analysis(analysis)
+    def _markdown_analysis(
+        analysis: StockAnalysis,
+        public_evidence_urls: set[str] | frozenset[str] = frozenset(),
+    ) -> list[str]:
+        return ReportStore._compact_markdown_analysis(analysis, public_evidence_urls)
 
     @staticmethod
     def _recommendation_for(
@@ -529,22 +573,93 @@ class ReportStore:
             "",
             "以下仅汇总本报告中的条件化研究建议，不构成交易指令。",
             "",
-            "| 股票 | 短线建议 | 中线建议 | 长线建议 |",
-            "| --- | --- | --- | --- |",
         ]
         for analysis in analyses:
-            recommendations = [
-                ReportStore._recommendation_summary(
-                    ReportStore._recommendation_for(analysis, horizon)
-                )
-                for horizon in (Horizon.SHORT, Horizon.MEDIUM, Horizon.LONG)
-            ]
             lines.append(
-                f"| {analysis.stock.symbol} {analysis.stock.name} | "
-                + " | ".join(recommendations)
-                + " |"
+                f"- {analysis.stock.symbol} {analysis.stock.name}："
+                + "；".join(ReportStore._recommendation_overview(analysis))
             )
         return lines
+
+    @staticmethod
+    def _canonical_evidence_url(evidence: Evidence) -> str:
+        return str(evidence.url)
+
+    @staticmethod
+    def _public_evidence(analyses: list[StockAnalysis]) -> list[Evidence]:
+        evidence_by_url: dict[str, list[tuple[str, Evidence]]] = {}
+        for analysis in analyses:
+            if analysis.research is None:
+                continue
+            for evidence in analysis.research.evidence:
+                evidence_by_url.setdefault(
+                    ReportStore._canonical_evidence_url(evidence), []
+                ).append((analysis.stock.symbol, evidence))
+
+        public_evidence: list[Evidence] = []
+        for entries in evidence_by_url.values():
+            symbols = {symbol for symbol, _ in entries}
+            presentation = {
+                (
+                    evidence.title,
+                    evidence.category,
+                    evidence.source_name,
+                    evidence.published_at,
+                    evidence.retrieved_at,
+                    evidence.direction,
+                    evidence.credibility,
+                    evidence.summary,
+                )
+                for _, evidence in entries
+            }
+            category = entries[0][1].category
+            # Evidence.symbols describes the configured subject consuming a source,
+            # so it can legitimately differ for a shared policy or international item.
+            # Only wholly identical presentation data from inherently public categories
+            # is moved to the overview; company and news material remains per stock.
+            if (
+                len(symbols) >= 2
+                and category in _PUBLIC_EVIDENCE_CATEGORIES
+                and len(presentation) == 1
+            ):
+                public_evidence.append(entries[0][1])
+        return public_evidence
+
+    @staticmethod
+    def _public_evidence_urls(analyses: list[StockAnalysis]) -> set[str]:
+        return {
+            ReportStore._canonical_evidence_url(evidence)
+            for evidence in ReportStore._public_evidence(analyses)
+        }
+
+    @staticmethod
+    def _stock_evidence_for_report(
+        analysis: StockAnalysis, analyses: list[StockAnalysis]
+    ) -> list[Evidence]:
+        return ReportStore._stock_evidence(analysis, ReportStore._public_evidence_urls(analyses))
+
+    @staticmethod
+    def _has_stock_international_evidence_for_report(
+        analysis: StockAnalysis, analyses: list[StockAnalysis]
+    ) -> bool:
+        del analyses
+        return ReportStore._has_stock_international_summary(analysis)
+
+    @staticmethod
+    def _stock_evidence(
+        analysis: StockAnalysis, public_evidence_urls: set[str] | frozenset[str]
+    ) -> list[Evidence]:
+        if analysis.research is None:
+            return []
+        return [
+            evidence
+            for evidence in analysis.research.evidence
+            if ReportStore._canonical_evidence_url(evidence) not in public_evidence_urls
+        ]
+
+    @staticmethod
+    def _has_stock_international_summary(analysis: StockAnalysis) -> bool:
+        return bool(analysis.research and analysis.research.international_summary.strip())
 
     @staticmethod
     def _recommendation_summary(recommendation: Recommendation | None) -> str:
@@ -597,15 +712,26 @@ class ReportStore:
         previous = analysis.previous_day
         if previous is None:
             return "数据缺口：无可验证的已完成行情。"
+        reason = ReportStore._display_value(previous.reason, "reason")
+        if reason.startswith("前日表现不作归因："):
+            return ReportStore._previous_day_metrics(analysis)
+        return (
+            f"{ReportStore._previous_day_metrics(analysis)}；"
+            f"主要归因：{ReportStore._brief_text(reason, 120)}"
+        )
+
+    @staticmethod
+    def _previous_day_metrics(analysis: StockAnalysis) -> str:
+        previous = analysis.previous_day
+        if previous is None:
+            return "数据缺口：无可验证的已完成行情。"
         change = (
             f"{previous.change_percent:+.2f}%"
             if previous.change_percent is not None
             else f"{previous.change:+.4f}"
         )
-        reason = ReportStore._brief_text(ReportStore._display_value(previous.reason, "reason"), 120)
         return (
-            f"数据截至 {previous.data_as_of.isoformat()}；收盘 {previous.close:.4f}；"
-            f"涨跌 {change}；{reason}"
+            f"数据截至 {previous.data_as_of.isoformat()}；收盘 {previous.close:.4f}；涨跌 {change}"
         )
 
     @staticmethod

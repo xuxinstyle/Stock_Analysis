@@ -90,7 +90,7 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
     assert f"- 生成时间：{report.generated_at.isoformat()}" in markdown
     assert f"- A股：可用；数据截至：{date_contract['market']}；" in markdown
     assert f"- 研究数据截至：{date_contract['research']}" in markdown
-    previous_markdown = _between(markdown, "## 前日表现与原因", "## 近期股价涨跌原因")
+    previous_markdown = _between(markdown, "## 价格表现与归因", "## 基本面分析")
     assert f"数据截至 {date_contract['previous_day']}；收盘" in previous_markdown
     technical_markdown = _between(markdown, "## 技术面分析", "## 政策分析")
     assert f"数据截至 {date_contract['technical']}；收盘" in technical_markdown
@@ -99,12 +99,12 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
     assert f"<dt>生成时间</dt><dd>{report.generated_at.isoformat()}</dd>" in html
     market_html = _between(html, "<section><h2>市场状态</h2>", "<section><h2>全局风险</h2>")
     assert f"<strong>A股</strong> · 可用 · {date_contract['market']} ·" in market_html
-    research_html = _between(html, "<section><h2>消息面分析</h2>", "<section><h2>突发事件</h2>")
+    research_html = _between(html, "<section><h2>消息面分析</h2>", "<section><h2>操作建议</h2>")
     assert f"<strong>研究数据截至：</strong>{date_contract['research']}" in research_html
     previous_html = _between(
         html,
-        "<section><h2>前日表现与原因</h2>",
-        "<section><h2>近期股价涨跌原因</h2>",
+        "<section><h2>价格表现与归因</h2>",
+        "<section><h2>基本面分析</h2>",
     )
     assert f"数据截至 {date_contract['previous_day']}；收盘" in previous_html
     technical_html = _between(html, "<section><h2>技术面分析</h2>", "<section><h2>政策分析</h2>")
@@ -138,13 +138,12 @@ def test_all_report_formats_preserve_complete_partial_report_contract(tmp_path: 
         assert all(fact in content for fact in rendered_facts)
 
     section_contracts = (
-        ("previous_day", "前日表现与原因"),
+        ("previous_day", "价格表现与归因"),
         ("fundamental_summary", "基本面分析"),
         ("industry_summary", "行业分析"),
         ("technical", "技术面分析"),
         ("policy_summary", "政策分析"),
         ("news_summary", "消息面分析"),
-        ("events", "突发事件"),
         ("recommendations", "操作建议"),
         ("evidence", "来源与数据缺口"),
     )

@@ -30,49 +30,47 @@
     <div class="notice research-notice"><strong>仅供研究使用</strong><span>{{ display_value(report.disclaimer, "disclaimer") }}</span></div>
   </header>
 
-  <section><h2>市场状态</h2><ul class="fact-list">{% for item in report.market_statuses %}<li><strong>{{ display_value(item.market.value, "market") }}</strong> · {{ display_value(item.status, "status") }} · {{ display_value(item.data_as_of) }} · {{ display_value(item.message, "message") }}<dl>{% for name, value in structured_fields(item) %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></li>{% else %}<li>暂无市场状态。</li>{% endfor %}</ul></section>
+  <section><h2>市场状态</h2><ul class="fact-list">{% for item in report.market_statuses %}<li><strong>{{ display_value(item.market.value, "market") }}</strong> · {{ display_value(item.status, "status") }} · {{ display_value(item.data_as_of) }} · {{ display_value(item.message, "message") }}</li>{% else %}<li>暂无市场状态。</li>{% endfor %}</ul></section>
   <section>
     <h2>大盘分析与后续展望</h2>
     <p><strong>数据截至：</strong>{{ report.market_outlook.data_as_of or "不可用" }}</p>
-    <p><strong>当前大盘分析：</strong>{{ report.market_outlook.current_analysis }}</p>
-    <p><strong>上行情景条件：</strong>{{ report.market_outlook.upside_conditions|join("；") }}</p>
-    <p><strong>下行情景条件：</strong>{{ report.market_outlook.downside_conditions|join("；") }}</p>
-    <p><strong>后续观察项：</strong>{{ report.market_outlook.watch_items|join("；") }}</p>
+    <p><strong>当前大盘分析：</strong>{{ brief_text(report.market_outlook.current_analysis, 180) }}</p>
+    <p><strong>上行情景条件：</strong>{{ brief_text(report.market_outlook.upside_conditions|join("；"), 160) }}</p>
+    <p><strong>下行情景条件：</strong>{{ brief_text(report.market_outlook.downside_conditions|join("；"), 160) }}</p>
+    <p><strong>后续观察项：</strong>{{ brief_text(report.market_outlook.watch_items|join("；"), 160) }}</p>
   </section>
-  <section><h2>全局风险</h2><ul class="fact-list">{% for risk in report.global_risks %}<li>{{ display_value(risk, "global_risks") }}</li>{% else %}<li>暂无已记录的全局风险。</li>{% endfor %}</ul></section>
+  <section><h2>全局风险</h2><ul class="fact-list">{% for risk in report.global_risks %}<li>{{ brief_text(display_value(risk, "global_risks"), 160) }}</li>{% else %}<li>暂无已记录的全局风险。</li>{% endfor %}</ul></section>
+  {% set public_evidence = public_evidence_for(report.analyses) %}
+  {% if public_evidence %}<section><h2>公共参考来源</h2><ul class="fact-list">{% for evidence in public_evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> · {{ evidence_summary(evidence) }}</li>{% endfor %}</ul></section>{% endif %}
   <section><h2>运行警告</h2><ul class="fact-list">{% for warning in report.run_warnings %}<li>{{ display_value(warning, "run_warnings") }}</li>{% else %}<li>无运行警告。</li>{% endfor %}</ul></section>
 
   {% for analysis in report.analyses %}
   <article id="{{ analysis.stock.symbol }}">
     <h1>{{ analysis.stock.symbol }} {{ analysis.stock.name }}</h1>
+    {% set local_evidence = stock_evidence_for(analysis, report.analyses) %}
 
     <section><h2>股票配置</h2><p>{{ stock_configuration_summary(analysis) }}</p></section>
 
-    <section><h2>前日表现与原因</h2><p>{{ previous_day_summary(analysis) }}</p></section>
-
-    <section><h2>近期股价涨跌原因</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.recent_price_move_summary, 180) }}</p>{% else %}<p>数据缺口：缺少研究输入，无法说明近期股价涨跌原因。</p>{% endif %}</section>
+    <section><h2>价格表现与归因</h2><p>{{ previous_day_summary(analysis) }}</p>{% if analysis.research %}<p>近期走势与驱动：{{ brief_text(analysis.research.recent_price_move_summary, 180) }}</p>{% else %}<p>数据缺口：缺少研究输入，无法说明近期股价涨跌原因。</p>{% endif %}</section>
 
     <section><h2>基本面分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.fundamental_summary, 160) }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
-    <section><h2>行业分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.industry_summary, 140) }}</p><p><strong>产品价格：</strong>{{ brief_text(analysis.research.product_price_summary, 160) }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
+    <section><h2>行业分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.industry_summary, 140) }}</p>{% if analysis.stock.product_price_focus %}<p><strong>产品价格：</strong>{{ brief_text(analysis.research.product_price_summary, 160) }}</p>{% endif %}{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
     <section><h2>技术面分析</h2><p>{{ technical_summary(analysis) }}</p></section>
     <section><h2>政策分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.policy_summary, 140) }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
-    <section><h2>消息面分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.news_summary, 140) }}</p><p><strong>国际传导：</strong>{{ brief_text(analysis.research.international_summary, 120) }}</p><p><strong>研究数据截至：</strong>{{ analysis.research.data_as_of }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
+    <section><h2>消息面分析</h2>{% if analysis.research %}<p>{{ brief_text(analysis.research.news_summary, 140) }}</p>{% if has_stock_international_evidence_for(analysis, report.analyses) %}<p><strong>国际传导：</strong>{{ brief_text(analysis.research.international_summary, 120) }}</p>{% endif %}<p><strong>研究数据截至：</strong>{{ analysis.research.data_as_of }}</p>{% else %}<p>数据缺口：缺少研究输入。</p>{% endif %}</section>
 
-    <section><h2>突发事件</h2><ul class="fact-list">{% if analysis.research %}{% for event in analysis.research.events %}<li><strong>{{ event.title }}</strong> · {{ brief_text(event.summary, 120) }}{% if event.citation_title and event.citation_url %}<br>事件来源：<a href="{{ event.citation_url }}">{{ event.citation_title }}</a>{% endif %}</li>{% else %}<li>无已提供的可验证突发事件。</li>{% endfor %}{% else %}<li>无已提供的可验证突发事件。</li>{% endif %}</ul></section>
+    {% if analysis.research and analysis.research.events %}<section><h2>突发事件</h2><ul class="fact-list">{% for event in analysis.research.events %}<li><strong>{{ event.title }}</strong> · {{ brief_text(event.summary, 120) }}{% if event.citation_title and event.citation_url %}<br>事件来源：<a href="{{ event.citation_url }}">{{ event.citation_title }}</a>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
 
     <section><h2>操作建议</h2><ul class="fact-list">{% for item in recommendation_overview(analysis) %}<li>{{ item }}</li>{% else %}<li>暂无可用建议。</li>{% endfor %}</ul></section>
 
-    <section><h2>来源与数据缺口</h2><ul class="fact-list">{% if analysis.research %}{% for evidence in analysis.research.evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> · {{ evidence_summary(evidence) }}</li>{% else %}<li>无已验证的引用来源。</li>{% endfor %}{% else %}<li>无已验证的引用来源。</li>{% endif %}{% for gap in analysis.data_gaps %}<li><strong>数据缺口：</strong>{{ display_value(gap, "data_gaps") }}</li>{% else %}<li>无已记录的数据缺口。</li>{% endfor %}</ul></section>
+    {% if local_evidence or analysis.data_gaps %}<section><h2>{% if analysis.data_gaps %}来源与数据缺口{% else %}来源{% endif %}</h2><ul class="fact-list">{% for evidence in local_evidence %}<li><a href="{{ evidence.url }}">{{ evidence.title }}</a> · {{ evidence_summary(evidence) }}</li>{% endfor %}{% for gap in analysis.data_gaps %}<li><strong>数据缺口：</strong>{{ display_value(gap, "data_gaps") }}</li>{% endfor %}</ul></section>{% endif %}
   </article>
   {% endfor %}
 
   <section class="recommendation-summary" aria-labelledby="recommendation-summary-heading">
     <h2 id="recommendation-summary-heading">全部标的操作汇总</h2>
     <p>以下仅汇总本报告中的条件化研究建议，不构成交易指令。</p>
-    <div class="summary-table"><table>
-      <thead><tr><th>股票</th><th>短线建议</th><th>中线建议</th><th>长线建议</th></tr></thead>
-      <tbody>{% for analysis in report.analyses %}<tr><td>{{ analysis.stock.symbol }} {{ analysis.stock.name }}</td>{% for horizon in ["short", "medium", "long"] %}<td>{{ recommendation_summary(recommendation_for(analysis, horizon)) }}</td>{% endfor %}</tr>{% else %}<tr><td colspan="4">暂无个股分析。</td></tr>{% endfor %}</tbody>
-    </table></div>
+    <ul class="fact-list">{% for analysis in report.analyses %}<li><strong>{{ analysis.stock.symbol }} {{ analysis.stock.name }}</strong>：{{ recommendation_overview(analysis)|join("；") }}</li>{% else %}<li>暂无个股分析。</li>{% endfor %}</ul>
   </section>
 </main>
 </body>
